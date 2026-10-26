@@ -1,6 +1,6 @@
 # AI Watch Spaces — Backend System Design
 
-**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 is authorized; M2 and later require explicit authorization.** Architecture and contracts only; no application code, scaffolding, build files or migrations exist. **M1 must not begin until the user explicitly authorizes it.**
+**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 and later require explicit authorization.**
 
 **Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This design implements **Track B: Backend-Only** on the PRD's **Option A — Java** stack.
 
@@ -146,7 +146,7 @@ Exact BOM-managed versions for 4.1.2 (Hibernate ORM, Jackson 3, Testcontainers, 
 | JSON Schema validation | `com.networknt:json-schema-validator` **3.0.x**, exact patch pinned at M1 (≥ 3.0.8 if it converges) | 3.x = Jackson 3 line; 2.x is incompatible with this stack. Pin an exact version; review release notes before any upgrade. |
 | YAML | `tools.jackson.dataformat:jackson-dataformat-yaml` (Jackson 3, BOM-managed) | Parsed to a Jackson tree only (§8.4). |
 | Tests | `spring-boot-starter-webflux-test`, `spring-boot-starter-data-jpa-test`, `spring-boot-starter-security-test`, `spring-boot-testcontainers`, Testcontainers PostgreSQL module (BOM-managed coordinates, M1-V8) | Docker is required to run integration tests. |
-| Database server | PostgreSQL **17.x** Docker image, pinned by minor tag at M1 | Same tag for Compose and Testcontainers (OD-4). |
+| Database server | PostgreSQL **17.x** Docker image, pinned by minor tag at M1: **`postgres:17.11`** | Same tag for Compose and Testcontainers (OD-4). |
 
 **Starters (complete list for the baseline):**
 - `spring-boot-starter-webflux`
@@ -158,6 +158,7 @@ Exact BOM-managed versions for 4.1.2 (Hibernate ORM, Jackson 3, Testcontainers, 
 - `spring-boot-starter-flyway` + `org.flywaydb:flyway-database-postgresql` (mandatory)
 - `org.postgresql:postgresql`
 - Jackson 3 `jackson-dataformat-yaml`
+- `io.micrometer:context-propagation` (BOM-managed; not transitive in 4.1.2; required for ADR-003 §7, found at M1-V10)
 - `json-schema-validator` 3.0.x
 - Test starters listed above
 
@@ -788,7 +789,10 @@ Base path `/api/v1`. JSON. UUID IDs. ISO-8601 UTC timestamps. Authentication req
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 422 | `TIMELINE_INVALID` (with `details[].field` = JSON path) |
 | 429 | `RATE_LIMITED` |
+| 500 | `INTERNAL_ERROR` (unexpected server error; generic message only; added at M1) |
 | 503 | `SERVICE_BUSY`, `ROOM_BUSY` |
+
+Framework-level client errors outside this table (for example 405 or 415) keep their HTTP status and use `MALFORMED_REQUEST`.
 
 `INVITE_CODE_INVALID` is deliberately returned for both unknown and wrong codes to avoid revealing room existence.
 
@@ -1047,7 +1051,7 @@ Emoji reactions: fixed allow-list. Locales: BCP 47 validation. IDs: UUID format.
 
 ### 8.4 Safe document parsing
 
-- **YAML** is parsed with Jackson 3's `YAMLMapper` (`tools.jackson.dataformat.yaml`) into a `JsonNode` tree only. Never bind to arbitrary types; never enable default typing or polymorphic deserialization. SnakeYAML `LoaderOptions`: `allowDuplicateKeys=false`, `maxAliasesForCollections=20`, `nestingDepthLimit=32`, `codePointLimit=2 MiB`. How these are wired through the Jackson 3 builder API is confirmed at M1-V7.
+- **YAML** is parsed with Jackson 3's `YAMLMapper` (`tools.jackson.dataformat.yaml`) into a `JsonNode` tree only. Never bind to arbitrary types; never enable default typing or polymorphic deserialization. Wiring confirmed at M1-V7: Jackson 3.1 YAML is built on snakeyaml-engine, so the limits are set with `LoadSettings` (`allowDuplicateKeys=false`, `allowRecursiveKeys=false`, `codePointLimit=2 MiB`) plus Jackson `StreamReadConstraints.maxNestingDepth=32` and `STRICT_DUPLICATE_DETECTION`. **YAML aliases are rejected** (including `<<:` merge keys): Jackson does not expand aliases, so `maxAliasesForCollections` has no effect and an aliased value would parse as the anchor's name. The YAML backend does not apply `maxStringLength`; YAML size is bounded by the code-point limit and field lengths by the JSON Schema.
 - **JSON** uses Jackson 3 `StreamReadConstraints`: max nesting 32, max string length 20 000.
 - Timeline schema validation uses `json-schema-validator` 3.0.x over the same Jackson 3 tree.
 - Uploads are capped at 2 MiB (`413` above).
@@ -1456,3 +1460,15 @@ Status: **Covered** = designed and testable; **Covered (deviation)** = covered w
 |---|---|---|
 | 1. Flyway PostgreSQL module | `org.flywaydb:flyway-database-postgresql` is a **mandatory** dependency (BOM-managed version). M1-V2 now verifies dependency resolution and successful migrations against the selected PostgreSQL 17 image; it no longer decides whether the module is needed. | ADR-002, `CLAUDE.md` |
 | 2. Subtitle-track integrity | `SUBTITLE_TRACK_SWAP` options must reference a track of the same title (application rule R11, checked at validation/publish) with the same locale (composite FK `(subtitle_track_id, locale)`, `locale` required). Room start pins only the `ACTIVE` track per locale of the room's title (R12). Pinned tracks, their cues and assets remain usable until the room ends (R13). Eligibility rule and five required tests. | §4.9, §15 E2.4, `DATABASE_SCHEMA.sql` |
+
+## Appendix D — M1 corrections (recorded during M1, 2026-10-26)
+
+Found while running the M1 verification checklist. None changes a PRD requirement, the database design, API paths, event names or units.
+
+| Finding | Change | Where |
+|---|---|---|
+| 1. YAML aliases (M1-V7) | Jackson 3 does not expand YAML aliases and ignores `maxAliasesForCollections`. Documents containing any alias are rejected, which is stricter than the previous "≤ 20 aliases". `LoaderOptions` → snakeyaml-engine `LoadSettings`; nesting through `StreamReadConstraints`. | §8.4 |
+| 2. Unexpected-error code | The error catalogue had no code for HTTP 500. Added `INTERNAL_ERROR` (generic message, no internal details). Unlisted framework 4xx statuses keep their status with `MALFORMED_REQUEST`. | §6.1 |
+| 3. Context propagation | `io.micrometer:context-propagation` is not transitive in Boot 4.1.2; declared explicitly (BOM-managed). | ADR-002 starters |
+| 4. PostgreSQL image | OD-4 default applied: `postgres:17.11` for Compose and Testcontainers. | ADR-002 |
+| 5. `db` health indicator | Boot's blocking `DataSourceHealthIndicator` would run JDBC on a shared Reactor scheduler; it is replaced by a reactive `db` indicator on the `db-*` executor (ADR-003 §1–§2). | Implementation only |

@@ -1,0 +1,9 @@
+# Integration-test profile. The datasource comes from Testcontainers via @ServiceConnection.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    # db/m1-probe holds a test-only migration for the M1 JSONB round-trip probe (schema m1_probe).
+    # It is never on the runtime classpath.
+    locations: classpath:db/migration,classpath:db/m1-probe
