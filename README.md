@@ -54,6 +54,8 @@ Errors use the envelope `{ code, message, correlationId, details[] }`.
 
 ## Spring Boot support window
 
-Not confirmed at M1: the spring.io support table could not be read from the build environment.
-Published Spring calendars list OSS support for 4.1.x until 2027-07; check
-<https://spring.io/projects/spring-boot#support> before relying on it.
+Spring Boot 4.1.0 was released on 2026-06-10 ([announcement](https://spring.io/blog/2026/06/10/spring-boot-4/)),
+and the [Spring support policy](https://spring.io/support-policy/) gives minor releases at least 13 months of
+OSS support, so 4.1.x is supported until **at least July 2027**. The exact end date, 2027-07-31, comes from
+secondary sources quoting Spring's generations feed and is not confirmed first-hand; see
+`docs/dependency-versions.md`.

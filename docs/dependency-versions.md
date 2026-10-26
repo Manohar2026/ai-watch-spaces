@@ -66,14 +66,20 @@ executed in this environment and succeeded.
 | M1-V9 | **Passed** | `spring-boot-starter-webflux-test` provides `WebTestClient` and `@AutoConfigureWebTestClient` (package `org.springframework.boot.webtestclient.autoconfigure`), plus `reactor-test` transitively, so it was not added explicitly. `spring-boot-starter-data-jpa-test` provides `@DataJpaTest` (`org.springframework.boot.data.jpa.test.autoconfigure`) and `@AutoConfigureTestDatabase` (`org.springframework.boot.jdbc.test.autoconfigure`); see `DataJpaSliceIT`. `spring-boot-starter-security-test` provides `SecurityMockServerConfigurers` (`HealthIT`). |
 | M1-V10 | **Passed** | Boot 4.1 keeps `spring.reactor.context-propagation` (values `limited` (default) and `auto`); it is set to `auto`. `io.micrometer:context-propagation` is **not** transitive in 4.1.2 and was added explicitly (version from the BOM). A `ThreadLocalAccessor` per MDC key is registered, and `DbExecutor` restores the Reactor context on `db-*` threads, clearing values left by a previous task. `StructuredLoggingAndMdcIT` shows the request's `correlationId` in the MDC on the Netty event loop and on `db-*`, with no leakage across 25 follow-up requests. |
 | M1-V11 | **Passed** | PostgreSQL 17.11 with Flyway 12.4.0 and pgjdbc 42.7.14: no "newer than supported" or other WARN-level log line during startup in any test run. Migrations and all integration tests pass. |
-| M1-V12 | **Passed** | Default of `spring.datasource.connection-fetch` in Boot 4.1.2 configuration metadata: `eager`. Left at the default. `BlockingBoundaryIT` confirms that every connection acquired while the app runs (probe JDBC + JPA, `db` health check) is acquired on `db-*`, and that the guard detects a deliberate acquisition on the Netty event loop. |
+| M1-V12 | **Passed** | Default of `spring.datasource.connection-fetch` in Boot 4.1.2 configuration metadata: `eager`. Left at the default. `BlockingBoundaryIT` covers these paths only: a probe endpoint doing JDBC plus a JPA repository call, and the readiness `db` health check. While the guard was armed during those requests, every connection was acquired on a `db-*` thread. A deliberate JDBC call on the Netty event loop was detected as a violation. Startup work (Flyway, Hibernate schema validation) runs unguarded on `main` by design, and no other request paths existed at M1. |
 | M1-V13 | **Passed** | Structured console logging: `logging.structured.format.console=ecs` (ECS 8.11 JSON); MDC keys appear as top-level fields (`correlationId`). Actuator health in Boot 4.1 lives in `spring-boot-health` (`org.springframework.boot.health.contributor.*`). `management.endpoint.health.probes.enabled` defaults to `true`. The groups are liveness = `livenessState` and readiness = `readinessState`, `db`, `realtime`. Details are shown to `ADMIN` only. Tests: `HealthIT`, `StructuredLoggingAndMdcIT`, `RealtimeHealthIndicatorTest`; verified under Compose as well. |
 
 ## Other findings recorded at M1
 
-- **Boot's `db` health indicator would break ADR-003.** WebFlux adapts the blocking `DataSourceHealthIndicator`
-  onto a shared Reactor scheduler, not `db-*`. It is replaced by a reactive indicator named
-  `dbHealthContributor` that runs its check on the db executor.
+- **Boot's `db` health indicator would break ADR-003, so it is replaced.** Boot 4.1.2 runs a blocking
+  `HealthIndicator` reactively through `org.springframework.boot.health.contributor.HealthIndicatorAdapter`,
+  whose bytecode is `Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())` (checked with `javap`
+  on `spring-boot-health-4.1.2.jar`). The auto-configured `DataSourceHealthIndicator` would therefore run
+  JDBC on `boundedElastic`. ADR-003 §2 forbids that: JDBC runs only on the `db-*` executor, whose thread count
+  equals the Hikari pool, and "do not use the default `boundedElastic` scheduler for JDBC". The replacement
+  bean `dbHealthContributor` (the bean name switches off Boot's auto-configured one) runs its connection check
+  on `db-*` and keeps the `db` key in the readiness group. Consequence: when the `db-*` queue is busy, the
+  check waits behind real work, may time out (3 s) or be refused, and readiness then reports DOWN.
 - **WebSession-backed security context hops threads.** A security chain using the default
   `WebSessionServerSecurityContextRepository` moves request handling to Reactor's `parallel-*` threads
   (the in-memory `WebSession` store uses `subscribeOn(boundedElastic)` + `publishOn(parallel)`). The
@@ -81,6 +87,14 @@ executed in this environment and succeeded.
 - **Thread names.** Boot 4.1 names the Reactor Netty server event-loop threads `webflux-http-epoll-*`
   (not `reactor-http-*`).
 - **Docker Hub** returned one `429 Too Many Requests` on an anonymous pull; a retry succeeded.
-- **Spring Boot 4.1.x OSS support window:** **not confirmed** at M1. The spring.io project page renders its
-  support table client-side, and `api.spring.io` is blocked by this environment's egress proxy. The
-  design's figure (OSS support until 2027-07) remains unverified.
+- **Spring Boot 4.1.x OSS support window** (checked after M1, 2026-10-26):
+  - Official evidence. The [Spring support policy](https://spring.io/support-policy/) states that minor
+    releases "will be supported for a minimum of 13 months" from release. The
+    [Spring Boot 4.1.0 announcement](https://spring.io/blog/2026/06/10/spring-boot-4/) dates 4.1.0 to
+    **2026-06-10**. Together: OSS support for 4.1.x lasts **at least until July 2027**.
+  - Exact end date **2027-07-31** (commercial support 2028-07-31): reported by secondary sources quoting
+    Spring's generations feed (`https://api.spring.io/projects/spring-boot/generations`). That feed, the
+    [project support table](https://spring.io/projects/spring-boot#support) (rendered client-side) and
+    `calendar.spring.io` could not be read from the verification environment, so the exact day is not
+    confirmed first-hand.
+  - The design's figure (OSS support until 2027-07) is consistent with the official evidence.

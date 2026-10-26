@@ -1471,4 +1471,4 @@ Found while running the M1 verification checklist. None changes a PRD requiremen
 | 2. Unexpected-error code | The error catalogue had no code for HTTP 500. Added `INTERNAL_ERROR` (generic message, no internal details). Unlisted framework 4xx statuses keep their status with `MALFORMED_REQUEST`. | §6.1 |
 | 3. Context propagation | `io.micrometer:context-propagation` is not transitive in Boot 4.1.2; declared explicitly (BOM-managed). | ADR-002 starters |
 | 4. PostgreSQL image | OD-4 default applied: `postgres:17.11` for Compose and Testcontainers. | ADR-002 |
-| 5. `db` health indicator | Boot's blocking `DataSourceHealthIndicator` would run JDBC on a shared Reactor scheduler; it is replaced by a reactive `db` indicator on the `db-*` executor (ADR-003 §1–§2). | Implementation only |
+| 5. `db` health indicator | Boot 4.1.2 adapts blocking health indicators with `subscribeOn(Schedulers.boundedElastic())`, so its `DataSourceHealthIndicator` would run JDBC on `boundedElastic`, which ADR-003 §2 forbids. It is replaced by a reactive `db` indicator on the `db-*` executor. | Implementation only |
