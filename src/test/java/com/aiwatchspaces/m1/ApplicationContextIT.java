@@ -55,16 +55,26 @@ class ApplicationContextIT {
     }
 
     @Test
-    void flywayWithPostgresModuleAppliedAllAvailableMigrations() {
-        // flyway-database-postgresql must be the module that supports this database.
-        assertThat(flyway.getConfiguration().getDataSource()).isNotNull();
+    void flywayWithPostgresModuleAppliedAllApplicationMigrations() {
         MigrationInfo[] all = flyway.info().all();
         assertThat(all).isNotEmpty();
         assertThat(Arrays.stream(all).map(MigrationInfo::getState)).allMatch(state -> state == MigrationState.SUCCESS);
-        assertThat(Arrays.stream(all).map(MigrationInfo::getScript)).contains("V0_1__m1_jsonb_probe.sql");
+        assertThat(Arrays.stream(all).map(MigrationInfo::getScript)).containsExactly("V1__auth_users.sql");
         Integer historyRows = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM flyway_schema_history WHERE success", Integer.class);
+                "SELECT count(*) FROM public.flyway_schema_history WHERE success", Integer.class);
         assertThat(historyRows).isEqualTo(all.length);
+    }
+
+    @Test
+    void m1ProbeMigrationIsKeptOutOfTheApplicationSchema() {
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT script FROM public.flyway_schema_history", String.class)).doesNotContain("V0_1__m1_jsonb_probe.sql");
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT script FROM m1_probe.flyway_m1_probe_history WHERE success AND type = 'SQL'", String.class))
+                .containsExactly("V0_1__m1_jsonb_probe.sql");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%probe%'",
+                Integer.class)).isZero();
     }
 
     @Test

@@ -1,6 +1,6 @@
 # AI Watch Spaces — Backend System Design
 
-**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 and later require explicit authorization.**
+**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 and later require explicit authorization.**
 
 **Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This design implements **Track B: Backend-Only** on the PRD's **Option A — Java** stack.
 
@@ -1472,3 +1472,23 @@ Found while running the M1 verification checklist. None changes a PRD requiremen
 | 3. Context propagation | `io.micrometer:context-propagation` is not transitive in Boot 4.1.2; declared explicitly (BOM-managed). | ADR-002 starters |
 | 4. PostgreSQL image | OD-4 default applied: `postgres:17.11` for Compose and Testcontainers. | ADR-002 |
 | 5. `db` health indicator | Boot 4.1.2 adapts blocking health indicators with `subscribeOn(Schedulers.boundedElastic())`, so its `DataSourceHealthIndicator` would run JDBC on `boundedElastic`, which ADR-003 §2 forbids. It is replaced by a reactive `db` indicator on the `db-*` executor. | Implementation only |
+
+## Appendix E — M2 implementation decisions (recorded before implementation, 2026-10-26)
+
+These fill behaviour the design leaves open. None changes an API path, error code, table or unit.
+
+| # | Topic | Decision |
+|---|---|---|
+| 1 | Where BCrypt runs | Password hashing and verification (BCrypt cost 12, CPU-bound, about 0.25 s) run on Reactor's `parallel` scheduler. They never run on a Netty event-loop thread, and never on `db-*`, so they do not hold a database thread. The adapter composes: credential lookup on `db-*` → verify on `parallel` → token issue on `db-*`. |
+| 2 | Login with an over-long password | A password over 128 characters or 72 UTF-8 bytes gets the generic `401 INVALID_CREDENTIALS`, after a dummy BCrypt check so timing matches. Unknown emails also run a dummy check. |
+| 3 | Access-token failures | Expired token → `401 TOKEN_EXPIRED`. Any other bearer-token failure (bad signature, wrong `iss`/`aud`, wrong algorithm, malformed, missing claims) → `401 UNAUTHENTICATED`. Responses carry `WWW-Authenticate: Bearer`. |
+| 4 | Required claims | `iss` (equals `aiws.auth.issuer`), `aud` containing `ai-watch-spaces`, `sub` (UUID), `sys_role` (`USER`/`ADMIN`), `iat`, `exp`, `jti`. `exp`/`nbf` checked with 30 s skew. Algorithm fixed to HS256. `sys_role` maps to authority `ROLE_<sys_role>`. |
+| 5 | Refresh-token order of checks | Unknown → `Invalid`. Revoked, whether expired or not → replay (`ReuseDetected`, family revoked, commit, then `401 REFRESH_TOKEN_REUSED`). Unrevoked but expired → `Invalid`. The access token issued on rotation re-reads `system_role` from the database. |
+| 6 | Refresh response | Same token-pair fields as login (`accessToken`, `accessTokenExpiresAt`, `refreshToken`, `refreshTokenExpiresAt`), without `user`. |
+| 7 | Logout | Requires a valid access token. Revokes every still-active token in the presented token's family with `LOGOUT` → `204`. Idempotent for an already revoked or expired token of the caller. A token that is unknown or belongs to another user → `401 REFRESH_TOKEN_INVALID`, and nothing changes. |
+| 8 | Admin re-check | `/actuator/**` (except the public health and info paths) requires `ROLE_ADMIN` in the token **and** `system_role = 'ADMIN'` re-read from the database on each call (§8.1). Health details still use the token role only. |
+| 9 | `PATCH /me` | Implemented (display name and subtitle locale). The `room.subtitle.variants` notification it triggers arrives with WebSockets and variations; there are no sockets in M2. |
+| 10 | Email | Stored trimmed. `normalized_email` = trimmed and lower-cased (`Locale.ROOT`). Duplicate normalized email → `409 EMAIL_TAKEN` (unique constraint, also under races). |
+| 11 | `Retry-After` on 429 | Seconds until the rate-limit bucket has a token again, at least 1. |
+| 12 | Test-only M1 probe | The M1 JSONB probe migration runs in its own schema (`m1_probe`) with its own Flyway history table in tests, so the application's `public` schema and `flyway_schema_history` contain only the real migrations. |
+

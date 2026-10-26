@@ -2,7 +2,7 @@
 
 Read `SYSTEM_DESIGN.md` (v0.4) and `DATABASE_SCHEMA.sql` (v0.4) before proposing or changing architecture. They are the design baseline for this backend-only project, **approved by the user on 2026-10-26**. `DATABASE_SCHEMA.sql` is the target state, not a migration.
 
-**Current checkpoint:** design v0.4 approved; **M1 implemented (2026-10-26)** — results in `docs/dependency-versions.md`, M1 corrections in SYSTEM_DESIGN Appendix D. Code may be written only in an environment where the checks can actually run (Maven Central and Docker Hub reachable, Docker daemon available). **Do not start M2 or any later milestone without the user's explicit authorization.**
+**Current checkpoint:** design v0.4 approved; **M1 and M2 implemented (2026-10-26)** — results in `docs/dependency-versions.md` and `docs/m2-verification.md`; M1 corrections in SYSTEM_DESIGN Appendix D, M2 decisions in Appendix E. Code may be written only in an environment where the checks can actually run (Maven Central and Docker Hub reachable, Docker daemon available). **Do not start M3 or any later milestone without the user's explicit authorization.**
 
 ## Guardrails
 

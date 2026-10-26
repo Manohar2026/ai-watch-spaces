@@ -31,6 +31,12 @@ public class ErrorResponseWriter {
 
     public Mono<Void> write(ServerWebExchange exchange, HttpStatusCode status, ErrorCode code, String message,
                             List<ErrorDetail> details) {
+        return write(exchange, status, code, message, details, null);
+    }
+
+    /** @param retryAfterSeconds value for {@code Retry-After} on 429/503; {@code null} uses the default */
+    public Mono<Void> write(ServerWebExchange exchange, HttpStatusCode status, ErrorCode code, String message,
+                            List<ErrorDetail> details, Long retryAfterSeconds) {
         ServerHttpResponse response = exchange.getResponse();
         if (response.isCommitted()) {
             return Mono.empty();
@@ -42,7 +48,8 @@ public class ErrorResponseWriter {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setContentLength(bytes.length);
         if (status.value() == 429 || status.value() == 503) {
-            headers.set(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
+            headers.set(HttpHeaders.RETRY_AFTER,
+                    retryAfterSeconds == null ? RETRY_AFTER_SECONDS : String.valueOf(retryAfterSeconds));
         }
         DataBuffer buffer = response.bufferFactory().wrap(bytes);
         return response.writeWith(Mono.just(buffer));

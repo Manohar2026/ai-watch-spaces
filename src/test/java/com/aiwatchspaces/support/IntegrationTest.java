@@ -16,6 +16,6 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
 @ActiveProfiles("test")
-@Import({TestcontainersConfiguration.class, M1ProbeConfiguration.class})
+@Import({TestcontainersConfiguration.class, M1ProbeSchemaConfiguration.class, M1ProbeConfiguration.class})
 public @interface IntegrationTest {
 }

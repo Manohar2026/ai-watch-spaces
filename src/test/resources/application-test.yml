@@ -4,6 +4,18 @@ spring:
     hibernate:
       ddl-auto: validate
   flyway:
-    # db/m1-probe holds a test-only migration for the M1 JSONB round-trip probe (schema m1_probe).
-    # It is never on the runtime classpath.
-    locations: classpath:db/migration,classpath:db/m1-probe
+    # Only the application's migrations. The M1 JSONB probe migration runs separately in its own
+    # schema and history table (M1ProbeSchemaConfiguration).
+    locations: classpath:db/migration
+
+aiws:
+  auth:
+    # Test-only key (base64 of a 35-byte ASCII string). Not a secret; never used outside tests.
+    jwt-signing-key: dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS0zMi1ieXRlcyE=
+    issuer: ai-watch-spaces-test
+  rate-limits:
+    # Generous so ordinary tests are not throttled; RateLimitIT uses the real defaults.
+    auth:
+      login-per-email: { limit: 1000, window: 1m }
+      login-per-ip: { limit: 1000, window: 1m }
+      register-per-ip: { limit: 1000, window: 1m }

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import com.aiwatchspaces.support.M1ProbeSchemaConfiguration;
 import com.aiwatchspaces.support.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, M1ProbeSchemaConfiguration.class})
 class DataJpaSliceIT {
 
     @Autowired

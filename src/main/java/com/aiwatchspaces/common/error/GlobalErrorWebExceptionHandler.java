@@ -49,12 +49,13 @@ public class GlobalErrorWebExceptionHandler implements WebExceptionHandler {
         if (mapped.status().is5xxServerError() && mapped.code() == ErrorCode.INTERNAL_ERROR) {
             logUnexpected(exchange, ex);
         }
-        return writer.write(exchange, mapped.status(), mapped.code(), mapped.message(), mapped.details());
+        return writer.write(exchange, mapped.status(), mapped.code(), mapped.message(), mapped.details(),
+                mapped.retryAfterSeconds());
     }
 
     static Mapped map(Throwable ex) {
         if (ex instanceof ApiException api) {
-            return new Mapped(api.code().status(), api.code(), api.getMessage(), api.details());
+            return new Mapped(api.code().status(), api.code(), api.getMessage(), api.details(), api.retryAfterSeconds());
         }
         if (ex instanceof WebExchangeBindException bind) {
             List<ErrorDetail> details = bind.getFieldErrors().stream().map(GlobalErrorWebExceptionHandler::detail).toList();
@@ -91,7 +92,7 @@ public class GlobalErrorWebExceptionHandler implements WebExceptionHandler {
             case 429 -> mapped(ErrorCode.RATE_LIMITED, "Too many requests.", List.of());
             case 503 -> mapped(ErrorCode.SERVICE_BUSY, "The service is busy. Retry shortly.", List.of());
             default -> status.is4xxClientError()
-                    ? new Mapped(status, ErrorCode.MALFORMED_REQUEST, "Malformed request.", List.of())
+                    ? new Mapped(status, ErrorCode.MALFORMED_REQUEST, "Malformed request.", List.of(), null)
                     : mapped(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.", List.of());
         };
     }
@@ -112,7 +113,7 @@ public class GlobalErrorWebExceptionHandler implements WebExceptionHandler {
     }
 
     private static Mapped mapped(ErrorCode code, String message, List<ErrorDetail> details) {
-        return new Mapped(code.status(), code, message, details);
+        return new Mapped(code.status(), code, message, details, null);
     }
 
     private static void logUnexpected(ServerWebExchange exchange, Throwable ex) {
@@ -123,6 +124,7 @@ public class GlobalErrorWebExceptionHandler implements WebExceptionHandler {
         }
     }
 
-    record Mapped(HttpStatusCode status, ErrorCode code, String message, List<ErrorDetail> details) {
+    record Mapped(HttpStatusCode status, ErrorCode code, String message, List<ErrorDetail> details,
+                  Long retryAfterSeconds) {
     }
 }

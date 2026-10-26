@@ -70,18 +70,10 @@ class HealthIT {
     }
 
     @Test
-    void metricsRequireAdmin() {
+    void metricsRejectAnonymousCallers() {
+        // Role-based access with real JWTs (including the database re-check) is covered by AdminAccessIT.
         client.get().uri("/actuator/metrics").exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
-
-        mockAuthClient.mutateWith(mockUser("viewer").roles("USER"))
-                .get().uri("/actuator/metrics").exchange()
-                .expectStatus().isForbidden()
-                .expectBody().jsonPath("$.code").isEqualTo("FORBIDDEN");
-
-        mockAuthClient.mutateWith(mockUser("admin").roles("ADMIN"))
-                .get().uri("/actuator/metrics").exchange()
-                .expectStatus().isOk();
     }
 }

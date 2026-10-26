@@ -39,6 +39,18 @@ server:
   shutdown: graceful
 
 aiws:
+  auth:
+    # Base64 of >= 32 random bytes; startup fails if missing or shorter (SYSTEM_DESIGN §8.1).
+    jwt-signing-key: ${JWT_SIGNING_KEY:}
+    issuer: ${JWT_ISSUER:ai-watch-spaces}
+    access-token-ttl: ${ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: 14d
+    clock-skew: 30s
+  rate-limits:
+    auth:
+      login-per-email: { limit: 5, window: 1m }
+      login-per-ip: { limit: 20, window: 1m }
+      register-per-ip: { limit: 5, window: 1h }
   db-executor:
     threads: ${DB_POOL_SIZE:10}
     queue-capacity: 500
