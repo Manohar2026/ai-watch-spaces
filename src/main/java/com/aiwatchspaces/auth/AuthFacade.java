@@ -14,7 +14,6 @@ import com.aiwatchspaces.auth.web.AuthDtos.TokenPairResponse;
 import com.aiwatchspaces.common.error.ApiException;
 import com.aiwatchspaces.common.error.ErrorCode;
 import com.aiwatchspaces.common.ratelimit.RateLimiter;
-import com.aiwatchspaces.common.security.AuthenticatedUser;
 import com.aiwatchspaces.common.text.PlainText;
 import com.aiwatchspaces.infrastructure.db.DbExecutor;
 import com.aiwatchspaces.users.EmailAddresses;
@@ -128,8 +127,8 @@ public class AuthFacade {
                 });
     }
 
-    public Mono<Void> logout(AuthenticatedUser caller, RefreshRequest request) {
-        return db.call(() -> refreshTokens.logout(caller.userId(), request.refreshToken(), now()))
+    public Mono<Void> logout(RefreshRequest request) {
+        return db.call(() -> refreshTokens.logout(request.refreshToken(), now()))
                 .onErrorMap(AuthFacade::isPersistenceFailure, AuthFacade::serviceBusy)
                 .flatMap(outcome -> outcome == LogoutOutcome.LOGGED_OUT
                         ? Mono.<Void>empty()

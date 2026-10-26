@@ -7,18 +7,18 @@ all resolved versions are as recorded in [`dependency-versions.md`](dependency-v
 
 ## Result
 
-`./mvnw clean verify`: enforcer 5/5 rules passed; **49 unit tests and 62 integration tests passed, 0 failed,
-0 skipped**. Docker Compose (`scripts/compose-check.sh`) verified separately.
+`./mvnw clean verify` (after the M2 follow-up below): enforcer 5/5 rules passed; **49 unit tests and 69 integration
+tests passed, 0 failed, 0 skipped**. Docker Compose (`scripts/compose-check.sh`) verified separately.
 
 ## What M2 delivers
 
 | Area | Implementation |
 |---|---|
 | Flyway V1 | `V1__auth_users.sql`: `app_users`, `refresh_tokens` and their indexes, copied verbatim from `DATABASE_SCHEMA.sql`. |
-| Endpoints | `POST /api/v1/auth/register` (201 `{userId}`), `login`, `refresh`, `logout` (204), `GET/PATCH /api/v1/me`. |
+| Endpoints | Public: `POST /api/v1/auth/register` (201 `{userId}`), `login`, `refresh`, `logout` (204; the refresh token is the credential). Bearer token: `GET/PATCH /api/v1/me`. Public auth routes ignore any `Authorization` header. |
 | Access tokens | HS256 JWT; key from `JWT_SIGNING_KEY` (base64, ≥ 256 bits); claims `iss`, `aud=ai-watch-spaces`, `sub`, `sys_role`, `iat`, `exp`, `jti`; TTL 15 min default, > 60 min rejected at startup. |
 | Validation | HS256 only; `typ` JWT; issuer; audience; `exp`/`nbf` with 30 s skew; required `sub` (UUID), `sys_role` (USER/ADMIN), `iat`, `jti`. Expired → `401 TOKEN_EXPIRED`; other failures → `401 UNAUTHENTICATED`; `WWW-Authenticate: Bearer`. |
-| Roles | `sys_role` → `ROLE_USER`/`ROLE_ADMIN`. Admin endpoints (`/actuator/**` except public health/info) also re-read `system_role` from the database on every call. |
+| Roles | A `sys_role = ADMIN` claim becomes `ROLE_ADMIN` only after `system_role` is re-read from the database on that request (on `db-*`); otherwise `ROLE_USER`. This governs `/actuator/**` (except public health/info) and the ADMIN-only health details. |
 | Refresh tokens | 256-bit opaque, SHA-256 hex stored, 14-day TTL, new family per login, `SELECT … FOR UPDATE` rotation, replay → family revoked and committed before `401 REFRESH_TOKEN_REUSED`; failed revocation → `503 SERVICE_BUSY`. No `noRollbackFor`/`REQUIRES_NEW`. |
 | Passwords | `DelegatingPasswordEncoder`, BCrypt strength 12 (`{bcrypt}$2a$12$…`), 12–128 characters and ≤ 72 UTF-8 bytes; hashing on Reactor `parallel`, not on Netty or `db-*`. |
 | Rate limits | In-memory token buckets in `common`: login 5/min per email and 20/min per IP; register 5/hour per IP; `429 RATE_LIMITED` with computed `Retry-After`. |
@@ -37,21 +37,38 @@ Behaviour the design left open is recorded in SYSTEM_DESIGN **Appendix E** (writ
 | Generic `INVALID_CREDENTIALS` (wrong password, unknown user, over-long password) | `AuthFlowIT.loginFailuresAreGeneric` | Passed |
 | Valid, missing, expired, within-skew, not-yet-valid, wrong issuer, wrong audience, missing/malformed claims, wrong key, tampered, `alg=none`, garbage, wrong `typ` | `AccessTokenValidationIT` (11 tests) | Passed |
 | USER → 403; ADMIN claim without DB ADMIN → 403; ADMIN → 200; demotion immediate; refresh re-reads role | `AdminAccessIT` | Passed |
+| Health details: shown to a database ADMIN; hidden after demotion with the same token; hidden for a forged ADMIN claim (existing or unknown user); demoted admin is USER on `/me` | `AdminAccessIT.healthDetailsRequireAdminInTheDatabase`, `forgedAdminClaimSeesNoHealthDetails`, `demotedAdminIsTreatedAsUserEverywhere` | Passed |
 | Rotation within a family; new family per login; only hashes stored | `RefreshTokenIT` | Passed |
 | **§8.2 required 1:** after `401 REFRESH_TOKEN_REUSED`, a separate DB read shows every family token revoked | `RefreshTokenIT.replayRevokesTheWholeFamilyAndTheRevocationIsCommitted` | Passed |
 | **§8.2 required 2:** the newest token of the family fails afterwards | `RefreshTokenIT.newestTokenFailsAfterReplay` | Passed |
 | **§8.2 required 3:** fault injected into the revocation `UPDATE` (PostgreSQL trigger) → `503`, not `401`, and no token row changes | `RefreshTokenIT.failedRevocationIsNot401AndLeavesTokenStateUnchanged` | Passed |
 | Concurrent use of one token: exactly one 200 and one 401; whole family revoked | `RefreshTokenIT.concurrentUseOfOneTokenRotatesOnceAndRevokesTheFamily` | Passed |
-| Unknown/expired refresh → `REFRESH_TOKEN_INVALID`, nothing changes; logout semantics and ownership | `RefreshTokenIT` | Passed |
+| Unknown/expired refresh → `REFRESH_TOKEN_INVALID`, nothing changes | `RefreshTokenIT.unknownAndExpiredTokensAreInvalidAndChangeNothing` | Passed |
+| Precedence: revoked **and** expired token → replay, family revocation committed | `RefreshTokenIT.revokedAndExpiredTokenIsStillAReplay` | Passed |
+| Precedence: expired, never-revoked token → `REFRESH_TOKEN_INVALID`, no row changes | `RefreshTokenIT.expiredActiveTokenIsInvalidAndRevokesNothing` | Passed |
+| Logout with no access token revokes exactly the presented family (other session and other user untouched) | `RefreshTokenIT.logoutWithoutAccessTokenRevokesExactlyThatFamily` | Passed |
+| Logout with an expired or garbage access token still revokes the family | `RefreshTokenIT.logoutWithExpiredOrInvalidAccessTokenStillWorks` | Passed |
+| Logout idempotent (repeat, rotated, expired token → 204); unknown → `REFRESH_TOKEN_INVALID` | `RefreshTokenIT.logoutIsIdempotentAndUnknownTokensAreInvalid` | Passed |
+| Refresh/login succeed despite a stale `Authorization` header | `RefreshTokenIT.publicAuthRoutesIgnoreAStaleAuthorizationHeader` | Passed |
 | Missing/short/non-base64 key fails startup; TTL 61 min fails, 60 min starts; key never in messages | `AuthStartupValidationTest` | Passed |
 | Rate limits with production defaults | `RateLimitIT`, `RateLimiterTest` | Passed |
 | No passwords, tokens, emails, hashes or signing key in logs | `NoSecretsInLogsIT` | Passed |
-| All auth DB work on `db-*` threads (register, login, refresh, replay, `/me`, admin re-check) | `BlockingBoundaryIT.authFlowsAcquireConnectionsOnlyOnDbThreads` | Passed |
+| All auth DB work on `db-*` threads (register, login, refresh, replay, `/me`, admin re-check, admin health details, logout) | `BlockingBoundaryIT.authFlowsAcquireConnectionsOnlyOnDbThreads` | Passed |
 
 **Docker Compose** (`postgres:17.11`, random 256-bit key in an uncommitted `.env`): liveness/readiness UP;
 Flyway history `1 | V1__auth_users.sql | t`; register 201 → login → `/me` 200 → refresh 200 → replay of the
 same refresh token 401 `REFRESH_TOKEN_REUSED`. The jar with an empty `JWT_SIGNING_KEY` exits with
 "JWT_SIGNING_KEY is missing".
+
+## M2 follow-up (logout contract, admin health details, refresh precedence)
+
+- **Logout** now matches §6.2/§8.2: public; the refresh token alone revokes its family. The first M2 version
+  required a valid access token and ownership. Public auth routes ignore the `Authorization` header, so an
+  expired access token can no longer block logout, refresh or login.
+- **Admin health details** now use the current database role. The ADMIN re-check moved from a per-path
+  authorization manager into the JWT-to-authentication conversion, so every `ROLE_ADMIN` decision (actuator
+  endpoints and health details) is database-confirmed on `db-*`. `AdminAuthorizationManager` was removed.
+- **Refresh precedence** is stated in §8.2 (revoked before expired) and tested for both orders.
 
 ## M1-V3 status
 
@@ -71,8 +88,6 @@ same refresh token 401 `REFRESH_TOKEN_REUSED`. The jar with an empty `JWT_SIGNIN
 ## Unresolved items and known limits
 
 - **Postman collection**: not started (Week 4 deliverable per SYSTEM_DESIGN §12).
-- **Health details** for ADMIN use the token role only; the database re-check applies to the other
-  admin-only actuator endpoints (Appendix E #8).
 - **Rate limits** are per process (single-instance assumption, §8.7) and key on the socket address; proxy
   headers are not trusted.
 - **BCrypt load**: hashing runs on Reactor `parallel` (one thread per CPU). A login flood is bounded by the

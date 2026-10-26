@@ -44,15 +44,15 @@ the app refuses to start without it), `JWT_ISSUER`, `ACCESS_TOKEN_TTL` (default 
 
 ## API (M2)
 
-Base path `/api/v1`. Public: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`.
-Bearer token required: `POST /auth/logout`, `GET /me`, `PATCH /me`. See SYSTEM_DESIGN §6.2 and Appendix E.
+Base path `/api/v1`. Public: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`,
+`POST /auth/logout` (the refresh token in the body is the credential). Bearer token required: `GET /me`, `PATCH /me`. See SYSTEM_DESIGN §6.2 and Appendix E.
 
 ## Operations endpoints
 
 | Endpoint | Access |
 |---|---|
 | `/actuator/health/liveness` | public |
-| `/actuator/health/readiness` (groups `readinessState`, `db`, `realtime`) | public; component details for `ADMIN` only |
+| `/actuator/health/readiness` (groups `readinessState`, `db`, `realtime`) | public; component details only for a token whose user is `ADMIN` in the database |
 | `/actuator/info` | public |
 | `/actuator/metrics` | `ADMIN` (token role and database role) |
 

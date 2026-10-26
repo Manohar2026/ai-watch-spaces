@@ -72,6 +72,45 @@ class AdminAccessIT {
         metrics(refreshed.accessToken()).expectStatus().isOk();
     }
 
+    @Test
+    void healthDetailsRequireAdminInTheDatabase() {
+        var account = auth.newAccount();
+        auth.setSystemRole(account.userId(), "ADMIN");
+        String adminToken = auth.login(account.email(), AuthTestSupport.PASSWORD).accessToken();
+        readiness(adminToken).expectBody()
+                .jsonPath("$.components.db.status").isEqualTo("UP")
+                .jsonPath("$.components.realtime.status").isEqualTo("UP");
+
+        auth.setSystemRole(account.userId(), "USER");
+        readiness(adminToken).expectBody().jsonPath("$.status").isEqualTo("UP").jsonPath("$.components").doesNotExist();
+        client.get().uri("/actuator/health").headers(h -> h.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody().jsonPath("$.components").doesNotExist();
+    }
+
+    @Test
+    void forgedAdminClaimSeesNoHealthDetails() {
+        var account = auth.newAccount();
+        readiness(auth.forge(account.userId(), "ADMIN", c -> { })).expectBody().jsonPath("$.components").doesNotExist();
+        readiness(auth.forge(java.util.UUID.randomUUID(), "ADMIN", c -> { })).expectBody()
+                .jsonPath("$.components").doesNotExist();
+    }
+
+    @Test
+    void demotedAdminIsTreatedAsUserEverywhere() {
+        var account = auth.newAccount();
+        auth.setSystemRole(account.userId(), "ADMIN");
+        String adminToken = auth.login(account.email(), AuthTestSupport.PASSWORD).accessToken();
+        auth.setSystemRole(account.userId(), "USER");
+        client.get().uri("/api/v1/me").headers(h -> h.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody().jsonPath("$.systemRole").isEqualTo("USER");
+        metrics(adminToken).expectStatus().isForbidden();
+    }
+
+    private WebTestClient.ResponseSpec readiness(String token) {
+        return client.get().uri("/actuator/health/readiness").headers(h -> h.setBearerAuth(token)).exchange()
+                .expectStatus().isOk();
+    }
+
     private WebTestClient.ResponseSpec metrics(String token) {
         return client.get().uri("/actuator/metrics").headers(h -> h.setBearerAuth(token)).exchange();
     }

@@ -9,7 +9,6 @@ import com.aiwatchspaces.auth.web.AuthDtos.RefreshRequest;
 import com.aiwatchspaces.auth.web.AuthDtos.RegisterRequest;
 import com.aiwatchspaces.auth.web.AuthDtos.RegisterResponse;
 import com.aiwatchspaces.auth.web.AuthDtos.TokenPairResponse;
-import com.aiwatchspaces.common.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -49,8 +48,8 @@ class AuthController {
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    Mono<Void> logout(AuthenticatedUser caller, @Valid @RequestBody RefreshRequest request) {
-        return auth.logout(caller, request);
+    Mono<Void> logout(@Valid @RequestBody RefreshRequest request) {
+        return auth.logout(request);
     }
 
     /** The socket peer address. Proxy headers are not trusted (single local deployment). */

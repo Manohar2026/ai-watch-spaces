@@ -37,6 +37,10 @@ class RefreshTokenService {
         return issue(userId, UUID.randomUUID(), now);
     }
 
+    /**
+     * Order of checks (SYSTEM_DESIGN §8.2): unknown → Invalid; revoked (expired or not) → replay, family
+     * revoked and committed; not revoked but expired → Invalid with no change; otherwise rotate.
+     */
     @Transactional
     RefreshOutcome refresh(String rawToken, Instant now) {
         Optional<RefreshToken> found = repository.lockByTokenHash(RefreshTokenCodec.hash(rawToken));
@@ -63,10 +67,14 @@ class RefreshTokenService {
         return new RefreshOutcome.Rotated(presented.userId(), role.get(), next);
     }
 
+    /**
+     * Public logout (SYSTEM_DESIGN §8.2): the refresh token is the credential. Revokes every still-active
+     * token of its family; idempotent for already revoked or expired tokens.
+     */
     @Transactional
-    LogoutOutcome logout(UUID callerId, String rawToken, Instant now) {
+    LogoutOutcome logout(String rawToken, Instant now) {
         Optional<RefreshToken> found = repository.lockByTokenHash(RefreshTokenCodec.hash(rawToken));
-        if (found.isEmpty() || !found.get().userId().equals(callerId)) {
+        if (found.isEmpty()) {
             return LogoutOutcome.INVALID;
         }
         repository.revokeActiveInFamily(found.get().familyId(), RevokedReason.LOGOUT, now);

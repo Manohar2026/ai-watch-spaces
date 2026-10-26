@@ -62,6 +62,8 @@ class BlockingBoundaryIT {
     void authFlowsAcquireConnectionsOnlyOnDbThreads() {
         AuthTestSupport auth = new AuthTestSupport(client, jdbc, encoder);
         String email = AuthTestSupport.uniqueEmail();
+        java.util.UUID adminId = auth.register(AuthTestSupport.uniqueEmail(), AuthTestSupport.PASSWORD, "Admin");
+        auth.setSystemRole(adminId, "ADMIN"); // test-side JDBC, before arming
         guard.arm();
 
         java.util.UUID userId = auth.register(email, AuthTestSupport.PASSWORD, "Boundary");
@@ -71,9 +73,15 @@ class BlockingBoundaryIT {
         client.get().uri("/api/v1/me").headers(h -> h.setBearerAuth(rotated.accessToken())).exchange()
                 .expectStatus().isOk();
         client.get().uri("/actuator/metrics").headers(h -> h.setBearerAuth(auth.forge(userId, "ADMIN", c -> { })))
-                .exchange().expectStatus().isForbidden(); // admin DB re-check path
+                .exchange().expectStatus().isForbidden(); // admin DB re-check path (not admin in DB)
+        client.get().uri("/actuator/health/readiness")
+                .headers(h -> h.setBearerAuth(auth.forge(adminId, "ADMIN", c -> { }))).exchange()
+                .expectStatus().isOk().expectBody().jsonPath("$.components.db.status").isEqualTo("UP");
+        client.post().uri("/api/v1/auth/logout").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("refreshToken", rotated.refreshToken())).exchange()
+                .expectStatus().isNoContent();
 
-        assertThat(guard.acquiringThreads()).hasSizeGreaterThanOrEqualTo(6);
+        assertThat(guard.acquiringThreads()).hasSizeGreaterThanOrEqualTo(9);
         assertThat(guard.violations()).isEmpty();
     }
 

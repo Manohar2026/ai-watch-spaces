@@ -2,6 +2,7 @@ package com.aiwatchspaces.m2;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -177,33 +178,121 @@ class RefreshTokenIT {
                 .satisfies(row -> assertThat(row.get("revoked_at")).isNull());
     }
 
+    /** §8.2 precedence: a revoked token that has also expired is still a replay, and the revocation commits. */
     @Test
-    void logoutRevokesTheFamilyAndLaterUseIsAReplay() {
+    void revokedAndExpiredTokenIsStillAReplay() {
         var account = auth.newAccount();
         Tokens t1 = account.tokens();
         Tokens t2 = auth.refreshOk(t1.refreshToken());
+        UUID t1Id = (UUID) auth.familyRows(account.userId()).get(0).get("id");
+        expire(t1Id);
 
-        logout(t2.accessToken(), t2.refreshToken()).expectStatus().isNoContent();
-        assertThat(auth.familyRows(account.userId())).extracting(row -> row.get("revoked_reason"))
-                .containsExactly("ROTATED", "LOGOUT");
-        logout(t2.accessToken(), t2.refreshToken()).expectStatus().isNoContent();
+        auth.refresh(t1.refreshToken()).expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.code").isEqualTo("REFRESH_TOKEN_REUSED");
 
+        List<Map<String, Object>> rows = auth.familyRows(account.userId());
+        assertThat(rows).extracting(row -> row.get("revoked_reason")).containsExactlyInAnyOrder("ROTATED", "REUSE_DETECTED");
+        auth.refresh(t2.refreshToken()).expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.code").isEqualTo("REFRESH_TOKEN_REUSED");
+    }
+
+    /** §8.2 precedence: an expired token that was never revoked is just invalid; nothing in the family changes. */
+    @Test
+    void expiredActiveTokenIsInvalidAndRevokesNothing() {
+        var account = auth.newAccount();
+        Tokens t1 = account.tokens();
+        Tokens t2 = auth.refreshOk(t1.refreshToken());
+        UUID t2Id = (UUID) auth.familyRows(account.userId()).get(1).get("id");
+        expire(t2Id);
+        List<Map<String, Object>> before = auth.familyRows(account.userId());
+
+        auth.refresh(t2.refreshToken()).expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.code").isEqualTo("REFRESH_TOKEN_INVALID");
+
+        assertThat(auth.familyRows(account.userId())).isEqualTo(before);
+        assertThat(before).extracting(row -> row.get("revoked_reason")).containsExactlyInAnyOrder("ROTATED", null);
+    }
+
+    @Test
+    void logoutWithoutAccessTokenRevokesExactlyThatFamily() {
+        var alice = auth.newAccount();
+        Tokens aliceOtherSession = auth.login(alice.email(), AuthTestSupport.PASSWORD);
+        var bob = auth.newAccount();
+        Tokens t2 = auth.refreshOk(alice.tokens().refreshToken());
+        UUID loggedOutFamily = (UUID) jdbc.queryForObject(
+                "SELECT family_id FROM refresh_tokens WHERE replaced_by_token_id IS NOT NULL AND user_id = ?",
+                UUID.class, alice.userId());
+
+        logout(null, t2.refreshToken()).expectStatus().isNoContent();
+
+        List<Map<String, Object>> aliceRows = auth.familyRows(alice.userId());
+        assertThat(aliceRows).filteredOn(row -> loggedOutFamily.equals(row.get("family_id")))
+                .extracting(row -> row.get("revoked_reason")).containsExactlyInAnyOrder("ROTATED", "LOGOUT");
+        assertThat(aliceRows).filteredOn(row -> !loggedOutFamily.equals(row.get("family_id")))
+                .singleElement().satisfies(row -> assertThat(row.get("revoked_at")).isNull());
+        assertThat(auth.familyRows(bob.userId())).singleElement()
+                .satisfies(row -> assertThat(row.get("revoked_at")).isNull());
+
+        auth.refreshOk(aliceOtherSession.refreshToken());
+        auth.refreshOk(bob.tokens().refreshToken());
         auth.refresh(t2.refreshToken()).expectStatus().isUnauthorized()
                 .expectBody().jsonPath("$.code").isEqualTo("REFRESH_TOKEN_REUSED");
     }
 
     @Test
-    void logoutRequiresAuthenticationAndOwnership() {
-        var alice = auth.newAccount();
-        var bob = auth.newAccount();
-        client.post().uri("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("refreshToken", alice.tokens().refreshToken())).exchange()
-                .expectStatus().isUnauthorized();
-        logout(bob.tokens().accessToken(), alice.tokens().refreshToken()).expectStatus().isUnauthorized()
+    void logoutWithExpiredOrInvalidAccessTokenStillWorks() {
+        var account = auth.newAccount();
+        Instant now = Instant.now();
+        String expiredAccess = auth.forge(account.userId(), "USER",
+                c -> c.issuedAt(now.minusSeconds(1200)).expiresAt(now.minusSeconds(120)));
+        client.get().uri("/api/v1/me").headers(h -> h.setBearerAuth(expiredAccess)).exchange()
+                .expectStatus().isUnauthorized().expectBody().jsonPath("$.code").isEqualTo("TOKEN_EXPIRED");
+
+        logout(expiredAccess, account.tokens().refreshToken()).expectStatus().isNoContent();
+        assertThat(auth.familyRows(account.userId())).singleElement()
+                .satisfies(row -> assertThat(row.get("revoked_reason")).isEqualTo("LOGOUT"));
+
+        var other = auth.newAccount();
+        logout("garbage.token.value", other.tokens().refreshToken()).expectStatus().isNoContent();
+        assertThat(auth.familyRows(other.userId())).singleElement()
+                .satisfies(row -> assertThat(row.get("revoked_reason")).isEqualTo("LOGOUT"));
+    }
+
+    @Test
+    void logoutIsIdempotentAndUnknownTokensAreInvalid() {
+        var account = auth.newAccount();
+        Tokens t1 = account.tokens();
+        Tokens t2 = auth.refreshOk(t1.refreshToken());
+
+        logout(null, t2.refreshToken()).expectStatus().isNoContent();
+        logout(null, t2.refreshToken()).expectStatus().isNoContent();
+        logout(null, t1.refreshToken()).expectStatus().isNoContent(); // already rotated: still 204
+        assertThat(auth.familyRows(account.userId())).extracting(row -> row.get("revoked_reason"))
+                .containsExactly("ROTATED", "LOGOUT");
+
+        var expiredAccount = auth.newAccount();
+        expire((UUID) auth.familyRows(expiredAccount.userId()).get(0).get("id"));
+        logout(null, expiredAccount.tokens().refreshToken()).expectStatus().isNoContent();
+        assertThat(auth.familyRows(expiredAccount.userId())).singleElement()
+                .satisfies(row -> assertThat(row.get("revoked_reason")).isEqualTo("LOGOUT"));
+
+        logout(null, "unknown-" + UUID.randomUUID()).expectStatus().isUnauthorized()
                 .expectBody().jsonPath("$.code").isEqualTo("REFRESH_TOKEN_INVALID");
-        assertThat(auth.familyRows(alice.userId())).singleElement()
-                .satisfies(row -> assertThat(row.get("revoked_at")).isNull());
-        auth.refreshOk(alice.tokens().refreshToken());
+    }
+
+    @Test
+    void publicAuthRoutesIgnoreAStaleAuthorizationHeader() {
+        var account = auth.newAccount();
+        Instant now = Instant.now();
+        String expiredAccess = auth.forge(account.userId(), "USER",
+                c -> c.issuedAt(now.minusSeconds(1200)).expiresAt(now.minusSeconds(120)));
+        client.post().uri("/api/v1/auth/refresh").headers(h -> h.setBearerAuth(expiredAccess))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(Map.of("refreshToken", account.tokens().refreshToken()))
+                .exchange().expectStatus().isOk();
+        client.post().uri("/api/v1/auth/login").headers(h -> h.setBearerAuth("garbage"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("email", account.email(), "password", AuthTestSupport.PASSWORD))
+                .exchange().expectStatus().isOk();
     }
 
     private int refreshStatus(CountDownLatch start, String token) {
@@ -215,8 +304,19 @@ class RefreshTokenIT {
         return auth.refresh(token).returnResult(String.class).getStatus().value();
     }
 
+    /** Logout with an optional (possibly invalid) access token; {@code null} sends no Authorization header. */
     private WebTestClient.ResponseSpec logout(String accessToken, String refreshToken) {
-        return client.post().uri("/api/v1/auth/logout").headers(h -> h.setBearerAuth(accessToken))
+        return client.post().uri("/api/v1/auth/logout").headers(h -> {
+                    if (accessToken != null) {
+                        h.setBearerAuth(accessToken);
+                    }
+                })
                 .contentType(MediaType.APPLICATION_JSON).bodyValue(Map.of("refreshToken", refreshToken)).exchange();
+    }
+
+    private void expire(UUID tokenId) {
+        assertThat(jdbc.update("""
+                UPDATE refresh_tokens SET created_at = now() - interval '20 days', expires_at = now() - interval '1 day'
+                WHERE id = ?""", tokenId)).isEqualTo(1);
     }
 }
