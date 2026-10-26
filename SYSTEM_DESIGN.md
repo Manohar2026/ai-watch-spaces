@@ -1,6 +1,6 @@
 # AI Watch Spaces — Backend System Design
 
-**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 is authorized; M2 and later require explicit authorization.** Architecture and contracts only; no application code, scaffolding, build files or migrations exist. **M1 must not begin until the user explicitly authorizes it.**
+**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 and later require explicit authorization.**
 
 **Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This design implements **Track B: Backend-Only** on the PRD's **Option A — Java** stack.
 
@@ -146,7 +146,7 @@ Exact BOM-managed versions for 4.1.2 (Hibernate ORM, Jackson 3, Testcontainers, 
 | JSON Schema validation | `com.networknt:json-schema-validator` **3.0.x**, exact patch pinned at M1 (≥ 3.0.8 if it converges) | 3.x = Jackson 3 line; 2.x is incompatible with this stack. Pin an exact version; review release notes before any upgrade. |
 | YAML | `tools.jackson.dataformat:jackson-dataformat-yaml` (Jackson 3, BOM-managed) | Parsed to a Jackson tree only (§8.4). |
 | Tests | `spring-boot-starter-webflux-test`, `spring-boot-starter-data-jpa-test`, `spring-boot-starter-security-test`, `spring-boot-testcontainers`, Testcontainers PostgreSQL module (BOM-managed coordinates, M1-V8) | Docker is required to run integration tests. |
-| Database server | PostgreSQL **17.x** Docker image, pinned by minor tag at M1 | Same tag for Compose and Testcontainers (OD-4). |
+| Database server | PostgreSQL **17.x** Docker image, pinned by minor tag at M1: **`postgres:17.11`** | Same tag for Compose and Testcontainers (OD-4). |
 
 **Starters (complete list for the baseline):**
 - `spring-boot-starter-webflux`
@@ -158,6 +158,7 @@ Exact BOM-managed versions for 4.1.2 (Hibernate ORM, Jackson 3, Testcontainers, 
 - `spring-boot-starter-flyway` + `org.flywaydb:flyway-database-postgresql` (mandatory)
 - `org.postgresql:postgresql`
 - Jackson 3 `jackson-dataformat-yaml`
+- `io.micrometer:context-propagation` (BOM-managed; not transitive in 4.1.2; required for ADR-003 §7, found at M1-V10)
 - `json-schema-validator` 3.0.x
 - Test starters listed above
 
@@ -788,7 +789,10 @@ Base path `/api/v1`. JSON. UUID IDs. ISO-8601 UTC timestamps. Authentication req
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 422 | `TIMELINE_INVALID` (with `details[].field` = JSON path) |
 | 429 | `RATE_LIMITED` |
+| 500 | `INTERNAL_ERROR` (unexpected server error; generic message only; added at M1) |
 | 503 | `SERVICE_BUSY`, `ROOM_BUSY` |
+
+Framework-level client errors outside this table (for example 405 or 415) keep their HTTP status and use `MALFORMED_REQUEST`.
 
 `INVITE_CODE_INVALID` is deliberately returned for both unknown and wrong codes to avoid revealing room existence.
 
@@ -1005,7 +1009,8 @@ Unknown event names, malformed JSON, frames > 16 KiB or invalid payloads → `ro
 - **Rotation:** lock the presented row (`SELECT … FOR UPDATE`). If it is active and unexpired → revoke it (`ROTATED`), link `replaced_by_token_id`, and issue a new token in the same family.
 - **Replay:** the presented token is already revoked (rotated or logged out) → revoke every still-active token in its family (`REUSE_DETECTED`), including any token legitimately issued by an earlier rotation.
 - Unknown or expired token → `401 REFRESH_TOKEN_INVALID` (read-only; nothing to commit).
-- Logout revokes the family (`LOGOUT`).
+- **Order of checks (explicit since the M2 follow-up):** (1) unknown hash → `Invalid`; (2) **revoked → replay**, whether or not the token has also expired: the family is revoked (`REUSE_DETECTED`), the transaction commits, then `401 REFRESH_TOKEN_REUSED`; (3) not revoked but expired → `Invalid`, nothing changes. Revocation is checked before expiry so that a stolen-and-rotated token is always treated as a security event, even after it would have expired; an expired token that was never used again is just stale.
+- Logout revokes the family (`LOGOUT`). It is **public**: the refresh token in the body is the credential, and no access token is required (an expired or missing access token does not prevent logout). Any still-active token of that token's family is revoked → `204`; repeating it, or using a token that is already revoked or expired, is also `204`. An unknown token → `401 REFRESH_TOKEN_INVALID`, nothing changes.
 - Purging old rows is deferred (O4).
 
 **Replay transaction outcome (must hold):** the family revocation is a security side effect that has to survive the rejected request.
@@ -1047,7 +1052,7 @@ Emoji reactions: fixed allow-list. Locales: BCP 47 validation. IDs: UUID format.
 
 ### 8.4 Safe document parsing
 
-- **YAML** is parsed with Jackson 3's `YAMLMapper` (`tools.jackson.dataformat.yaml`) into a `JsonNode` tree only. Never bind to arbitrary types; never enable default typing or polymorphic deserialization. SnakeYAML `LoaderOptions`: `allowDuplicateKeys=false`, `maxAliasesForCollections=20`, `nestingDepthLimit=32`, `codePointLimit=2 MiB`. How these are wired through the Jackson 3 builder API is confirmed at M1-V7.
+- **YAML** is parsed with Jackson 3's `YAMLMapper` (`tools.jackson.dataformat.yaml`) into a `JsonNode` tree only. Never bind to arbitrary types; never enable default typing or polymorphic deserialization. Wiring confirmed at M1-V7: Jackson 3.1 YAML is built on snakeyaml-engine, so the limits are set with `LoadSettings` (`allowDuplicateKeys=false`, `allowRecursiveKeys=false`, `codePointLimit=2 MiB`) plus Jackson `StreamReadConstraints.maxNestingDepth=32` and `STRICT_DUPLICATE_DETECTION`. **YAML aliases are rejected** (including `<<:` merge keys): Jackson does not expand aliases, so `maxAliasesForCollections` has no effect and an aliased value would parse as the anchor's name. The YAML backend does not apply `maxStringLength`; YAML size is bounded by the code-point limit and field lengths by the JSON Schema.
 - **JSON** uses Jackson 3 `StreamReadConstraints`: max nesting 32, max string length 20 000.
 - Timeline schema validation uses `json-schema-validator` 3.0.x over the same Jackson 3 tree.
 - Uploads are capped at 2 MiB (`413` above).
@@ -1456,3 +1461,35 @@ Status: **Covered** = designed and testable; **Covered (deviation)** = covered w
 |---|---|---|
 | 1. Flyway PostgreSQL module | `org.flywaydb:flyway-database-postgresql` is a **mandatory** dependency (BOM-managed version). M1-V2 now verifies dependency resolution and successful migrations against the selected PostgreSQL 17 image; it no longer decides whether the module is needed. | ADR-002, `CLAUDE.md` |
 | 2. Subtitle-track integrity | `SUBTITLE_TRACK_SWAP` options must reference a track of the same title (application rule R11, checked at validation/publish) with the same locale (composite FK `(subtitle_track_id, locale)`, `locale` required). Room start pins only the `ACTIVE` track per locale of the room's title (R12). Pinned tracks, their cues and assets remain usable until the room ends (R13). Eligibility rule and five required tests. | §4.9, §15 E2.4, `DATABASE_SCHEMA.sql` |
+
+## Appendix D — M1 corrections (recorded during M1, 2026-10-26)
+
+Found while running the M1 verification checklist. None changes a PRD requirement, the database design, API paths, event names or units.
+
+| Finding | Change | Where |
+|---|---|---|
+| 1. YAML aliases (M1-V7) | Jackson 3 does not expand YAML aliases and ignores `maxAliasesForCollections`. Documents containing any alias are rejected, which is stricter than the previous "≤ 20 aliases". `LoaderOptions` → snakeyaml-engine `LoadSettings`; nesting through `StreamReadConstraints`. | §8.4 |
+| 2. Unexpected-error code | The error catalogue had no code for HTTP 500. Added `INTERNAL_ERROR` (generic message, no internal details). Unlisted framework 4xx statuses keep their status with `MALFORMED_REQUEST`. | §6.1 |
+| 3. Context propagation | `io.micrometer:context-propagation` is not transitive in Boot 4.1.2; declared explicitly (BOM-managed). | ADR-002 starters |
+| 4. PostgreSQL image | OD-4 default applied: `postgres:17.11` for Compose and Testcontainers. | ADR-002 |
+| 5. `db` health indicator | Boot 4.1.2 adapts blocking health indicators with `subscribeOn(Schedulers.boundedElastic())`, so its `DataSourceHealthIndicator` would run JDBC on `boundedElastic`, which ADR-003 §2 forbids. It is replaced by a reactive `db` indicator on the `db-*` executor. | Implementation only |
+
+## Appendix E — M2 implementation decisions (recorded before implementation, 2026-10-26)
+
+These fill behaviour the design leaves open. None changes an API path, error code, table or unit.
+
+| # | Topic | Decision |
+|---|---|---|
+| 1 | Where BCrypt runs | Password hashing and verification (BCrypt cost 12, CPU-bound, about 0.25 s) run on Reactor's `parallel` scheduler. They never run on a Netty event-loop thread, and never on `db-*`, so they do not hold a database thread. The adapter composes: credential lookup on `db-*` → verify on `parallel` → token issue on `db-*`. |
+| 2 | Login with an over-long password | A password over 128 characters or 72 UTF-8 bytes gets the generic `401 INVALID_CREDENTIALS`, after a dummy BCrypt check so timing matches. Unknown emails also run a dummy check. |
+| 3 | Access-token failures | Expired token → `401 TOKEN_EXPIRED`. Any other bearer-token failure (bad signature, wrong `iss`/`aud`, wrong algorithm, malformed, missing claims) → `401 UNAUTHENTICATED`. Responses carry `WWW-Authenticate: Bearer`. |
+| 4 | Required claims | `iss` (equals `aiws.auth.issuer`), `aud` containing `ai-watch-spaces`, `sub` (UUID), `sys_role` (`USER`/`ADMIN`), `iat`, `exp`, `jti`. `exp`/`nbf` checked with 30 s skew. Algorithm fixed to HS256. `sys_role` maps to authority `ROLE_<sys_role>`. |
+| 5 | Refresh-token order of checks | Now stated in §8.2: unknown → `Invalid`; revoked (expired or not) → replay with committed family revocation; unrevoked but expired → `Invalid`. The access token issued on rotation re-reads `system_role` from the database. |
+| 6 | Refresh response | Same token-pair fields as login (`accessToken`, `accessTokenExpiresAt`, `refreshToken`, `refreshTokenExpiresAt`), without `user`. |
+| 7 | Logout | **Revised in the M2 follow-up to match §6.2/§8.2:** public; the refresh token alone revokes its family (`LOGOUT`) → `204`, idempotent; unknown → `401 REFRESH_TOKEN_INVALID`. Any `Authorization` header on the public auth routes (register, login, refresh, logout) is ignored, so a stale or expired access token cannot block them. (The first M2 version required an access token and ownership; that was stricter than the approved contract.) |
+| 8 | Admin re-check | **Revised in the M2 follow-up:** a token claiming `sys_role = ADMIN` is granted `ROLE_ADMIN` only after `system_role` is re-read from the database on that request (on `db-*`); otherwise it gets `ROLE_USER`. Every admin decision therefore uses the current database role: `/actuator/**` (except public health and info) and the ADMIN-only health details. A demoted administrator loses both immediately. USER tokens cause no database read. |
+| 9 | `PATCH /me` | Implemented (display name and subtitle locale). The `room.subtitle.variants` notification it triggers arrives with WebSockets and variations; there are no sockets in M2. |
+| 10 | Email | Stored trimmed. `normalized_email` = trimmed and lower-cased (`Locale.ROOT`). Duplicate normalized email → `409 EMAIL_TAKEN` (unique constraint, also under races). |
+| 11 | `Retry-After` on 429 | Seconds until the rate-limit bucket has a token again, at least 1. |
+| 12 | Test-only M1 probe | The M1 JSONB probe migration runs in its own schema (`m1_probe`) with its own Flyway history table in tests, so the application's `public` schema and `flyway_schema_history` contain only the real migrations. |
+

@@ -1,0 +1,88 @@
+# Defaults only. Secrets and environment-specific values come from environment variables
+# (SYSTEM_DESIGN §8.8, §11). See .env.example.
+spring:
+  application:
+    name: ai-watch-spaces
+  main:
+    web-application-type: reactive
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/aiws}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    hikari:
+      # Must equal aiws.db-executor.threads (ADR-003 §2); both read DB_POOL_SIZE.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: ${DB_POOL_SIZE:10}
+      connection-timeout: 2000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  reactor:
+    # Reactor context -> MDC on every operator (M1-V10). Boot 4.1 default is "limited".
+    context-propagation: auto
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+aiws:
+  auth:
+    # Base64 of >= 32 random bytes; startup fails if missing or shorter (SYSTEM_DESIGN §8.1).
+    jwt-signing-key: ${JWT_SIGNING_KEY:}
+    issuer: ${JWT_ISSUER:ai-watch-spaces}
+    access-token-ttl: ${ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: 14d
+    clock-skew: 30s
+  rate-limits:
+    auth:
+      login-per-email: { limit: 5, window: 1m }
+      login-per-ip: { limit: 20, window: 1m }
+      register-per-ip: { limit: 5, window: 1h }
+  db-executor:
+    threads: ${DB_POOL_SIZE:10}
+    queue-capacity: 500
+  realtime:
+    health:
+      saturation-ratio: 0.9
+
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: ai-watch-spaces
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,realtime
+  info:
+    env:
+      enabled: false
