@@ -1,8 +1,8 @@
 # AI Watch Spaces — Backend System Design
 
-**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 authorized by the user on 2026-11-04 and is in implementation; M4 and later still require separate explicit authorization.**
+**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 implemented and merged into `main` on 2026-11-04; CI run #13 passed (67 unit and 71 integration tests). M4 and later still require separate explicit authorization.**
 
-**Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This design implements **Track B: Backend-Only** on the PRD's **Option A — Java** stack.
+**Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This document preserves the historical **Track B: Backend-Only** implementation design on the PRD's **Option A — Java** stack. The current full-stack product scope adds React as documented in `FULL_STACK_ARCHITECTURE.md`.
 
 **Labels used in this document:**
 - **[PRD]** — an explicit PRD requirement or acceptance criterion.
