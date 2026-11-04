@@ -40,9 +40,10 @@ npm run preview
 - Landing page and responsive authentication screens.
 - Registration via `POST /api/v1/auth/register`.
 - Login via `POST /api/v1/auth/login`, followed by protected `GET /api/v1/me`.
-- Logout via `POST /api/v1/auth/logout` using the refresh token in the request body.
+- Automatic access-token refresh using `POST /api/v1/auth/refresh` before expiry; refresh requests are single-flight to avoid triggering backend replay detection.
+- Logout via `POST /api/v1/auth/logout` using the most recently rotated refresh token in the request body.
 - Typed API error handling using the backend error envelope.
 
-Tokens are kept in React memory only. Refresh-token rotation is not yet used by the UI, and reloading the tab loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
+Tokens are kept in React memory only. Access tokens are refreshed automatically while the tab remains open; reloading the tab still loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
 
 The frontend CI has passed dependency installation, `npm run typecheck`, and `npm run build`. These flows have not yet been verified end-to-end against a locally running backend.
