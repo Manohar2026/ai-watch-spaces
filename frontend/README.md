@@ -35,4 +35,14 @@ npm run preview
 - `src/lib`: shared API client and utilities (add during API integration).
 - `src/styles`: global styles and design tokens.
 
-The current screen is a visual scaffold only. It does not yet call backend APIs or implement authentication.
+## Current frontend features
+
+- Landing page and responsive authentication screens.
+- Registration via `POST /api/v1/auth/register`.
+- Login via `POST /api/v1/auth/login`, followed by protected `GET /api/v1/me`.
+- Logout via `POST /api/v1/auth/logout` using the refresh token in the request body.
+- Typed API error handling using the backend error envelope.
+
+Tokens are kept in React memory only. Refresh-token rotation is not yet used by the UI, and reloading the tab loses the local session. See [../../docs/frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
+
+These flows are implemented but have not yet been verified end-to-end from this environment.
