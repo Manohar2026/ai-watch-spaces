@@ -170,7 +170,7 @@ export function AuthScreen({ mode, notice, onModeChange, onBack }: AuthScreenPro
             </button>
           </p>
           <p className="auth-security-note">
-            Your session stays in this browser tab for now. We do not save tokens in browser storage.
+            Your session is held in memory only. Reloading or closing this tab ends it; tokens are not saved in browser storage.
           </p>
         </div>
       </section>
