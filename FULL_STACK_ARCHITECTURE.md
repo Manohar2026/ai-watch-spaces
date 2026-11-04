@@ -153,7 +153,7 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 |---|---|---|
 | F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
 | F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
-| F2 | Authentication UI and API integration | Initial register/login/logout/current-user integration code committed; end-to-end verification and refresh/session-restoration design remain open |
+| F2 | Authentication UI and API integration | Initial register/login/logout/current-user code committed; end-to-end browser verification and refresh/session-restoration design remain open |
 | F3 | App shell, dashboard and catalogue | Responsive navigation and catalogue/dashboard screens use backend APIs |
 | F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
 | F5 | Player and realtime foundation | WebSocket connection, authoritative playback updates, reconnect/resync |
