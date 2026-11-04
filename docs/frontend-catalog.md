@@ -1,6 +1,6 @@
 # Frontend catalogue integration
 
-**Status:** Initial catalogue UI and API integration are committed on `feature/catalog-ui`; frontend CI and local browser verification are pending.
+**Status:** Initial catalogue UI/API integration is on `main`; follow-up refinements are in PR #5. The refinements' frontend CI and local browser verification are pending.
 
 ## Backend API consumed
 
