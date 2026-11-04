@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
 
 export interface UserProfile {
   id: string;
@@ -80,6 +80,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
   return typeof value === 'object' && value !== null;
+}
+
+/** Typed GET helper for feature APIs that require an access token. */
+export function authenticatedGet<T>(path: string, accessToken: string): Promise<T> {
+  return request<T>(path, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 }
 
 export const authApi = {
