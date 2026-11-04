@@ -1,4 +1,5 @@
 target/
+assets/
 .env
 .env.*
 !.env.example
