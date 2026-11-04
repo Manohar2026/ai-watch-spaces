@@ -134,16 +134,14 @@ class SampleContentSeeder {
             JsonNode endNode = event.get("endMs");
             Integer endMs = endNode == null || endNode.isNull() ? null : endNode.asInt();
             StringBuilder searchText = new StringBuilder();
-            var payloadFields = event.path("payload").fields();
-            while (payloadFields.hasNext()) {
-                var field = payloadFields.next();
+            event.path("payload").propertyStream().forEach(field -> {
                 if (field.getValue().isTextual()) {
                     if (searchText.length() > 0) {
                         searchText.append(' ');
                     }
                     searchText.append(field.getValue().asText());
                 }
-            }
+            });
             String normalizedSearchText = Normalizer.normalize(searchText.toString(), Normalizer.Form.NFC)
                     .toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").strip();
             jdbc.update("""
