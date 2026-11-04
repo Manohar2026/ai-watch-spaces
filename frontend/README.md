@@ -43,6 +43,6 @@ npm run preview
 - Logout via `POST /api/v1/auth/logout` using the refresh token in the request body.
 - Typed API error handling using the backend error envelope.
 
-Tokens are kept in React memory only. Refresh-token rotation is not yet used by the UI, and reloading the tab loses the local session. See [../../docs/frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
+Tokens are kept in React memory only. Refresh-token rotation is not yet used by the UI, and reloading the tab loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
 
 These flows are implemented but have not yet been verified end-to-end from this environment.
