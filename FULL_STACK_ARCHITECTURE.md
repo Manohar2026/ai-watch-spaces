@@ -154,7 +154,7 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 | F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
 | F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
 | F2 | Authentication UI and API integration | Register/login/logout/current-user and in-memory automatic refresh code committed; end-to-end browser verification and persistent session-restoration design remain open |
-| F3 | App shell, dashboard and catalogue | Responsive navigation and catalogue/dashboard screens use backend APIs |
+| F3 | App shell, dashboard and catalogue | Responsive navigation and catalogue/dashboard screens use backend APIs; backend M3 catalogue APIs are being implemented on `feature/m3-catalog-timeline` |
 | F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
 | F5 | Player and realtime foundation | WebSocket connection, authoritative playback updates, reconnect/resync |
 | F6 | Chat and presence | Ordered history, live messages, typing, reactions and presence |
