@@ -1,6 +1,6 @@
 # F3 — Catalogue browsing and title details
 
-**Status:** Implemented on `feature/catalog-ui`; tracked by the stacked frontend PR.
+**Status:** Implemented on `feature/catalog-ui`; tracked by [PR #5](https://github.com/Manohar2026/ai-watch-spaces/pull/5), targeting `main`.
 
 ## User flow
 
