@@ -1,6 +1,6 @@
 # AI Watch Spaces — Backend System Design
 
-**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 and later require explicit authorization.**
+**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 was explicitly authorized by the user on 2026-11-04; M4 and later still require separate explicit authorization.**
 
 **Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This design implements **Track B: Backend-Only** on the PRD's **Option A — Java** stack.
 
@@ -1281,7 +1281,7 @@ AI, variations and recommendations do not start until M7 passes.
 
 Frozen by the user's approval of v0.4 on 2026-10-26.
 
-1. Backend-only (Track B); no UI.
+1. Historical scope (superseded on 2026-11-04): the original v0.4 baseline was backend-only (Track B). The approved `FULL_STACK_ARCHITECTURE.md` addendum adds a React + TypeScript frontend under `frontend/`; the backend remains the Java modular monolith described here.
 2. One Spring Boot modular monolith; no microservices.
 3. Java 21, Spring Boot 4.1.2, Maven; WebFlux REST/WebSockets (plain JSON, no STOMP); Spring Security 7 with JWT; Spring Data JPA with Hibernate 7; Jackson 3 only (no Jackson 2); json-schema-validator 3.0.x; PostgreSQL 17; Flyway per-slice migrations; no `spring-boot-starter-web`/`webmvc`. Exact patch versions are fixed at M1 by the verification checklist.
 4. Blocking JPA only on the dedicated DB executor sized to the Hikari pool; no reactive return types from JPA-transactional methods; explicit principal; DTO mapping inside transactions; commit-then-reject via outcome values where a rejected request must keep its side effects.
