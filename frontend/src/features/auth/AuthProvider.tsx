@@ -28,15 +28,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsSubmitting(true);
     try {
       const response = await authApi.login(email, password);
-      // Verify the newly issued bearer token against the protected profile endpoint.
-      const profile = await authApi.me(response.accessToken);
-      setSession({
-        accessToken: response.accessToken,
-        accessTokenExpiresAt: response.accessTokenExpiresAt,
-        refreshToken: response.refreshToken,
-        refreshTokenExpiresAt: response.refreshTokenExpiresAt,
-      });
-      setUser(profile);
+      try {
+        // Verify the newly issued bearer token against the protected profile endpoint.
+        const profile = await authApi.me(response.accessToken);
+        setSession({
+          accessToken: response.accessToken,
+          accessTokenExpiresAt: response.accessTokenExpiresAt,
+          refreshToken: response.refreshToken,
+          refreshTokenExpiresAt: response.refreshTokenExpiresAt,
+        });
+        setUser(profile);
+      } catch (error) {
+        // Do not leave an unused refresh-token family active if profile verification fails.
+        await authApi.logout(response.refreshToken).catch(() => undefined);
+        throw error;
+      }
     } finally {
       setIsSubmitting(false);
     }
