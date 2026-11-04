@@ -1,6 +1,6 @@
 # M3 — Catalogue, timeline metadata and subtitles
 
-**Status:** Implementation branch: `feature/m3-catalog-timeline`. Verification is pending GitHub Actions.
+**Status:** Implemented and merged into `main` on 2026-11-04. Backend CI run #13 passed: 67 unit tests and 71 integration tests, zero failures, errors, or skips.
 **Design basis:** `SYSTEM_DESIGN.md` v0.4, milestone M3; canonical target schema `DATABASE_SCHEMA.sql`.
 
 ## Scope delivered in this slice
@@ -75,4 +75,4 @@ Run the full backend checks with:
 ./mvnw -B verify
 ```
 
-GitHub Actions uses PostgreSQL Testcontainers for integration tests. **Verified:** run [#13](https://github.com/Manohar2026/ai-watch-spaces/actions/runs/41876458081) passed on source commit `9524342a6c3bef3a7eeaaf54be0f04ad5cc27f68`: 67 unit tests and 71 integration tests, zero failures, errors, or skips. A subsequent README-only commit updated project status; no backend source files changed after the passing run. The PR remains a draft pending review and integration with the full-stack branch.
+GitHub Actions uses PostgreSQL Testcontainers for integration tests. **Verified:** run [#13](https://github.com/Manohar2026/ai-watch-spaces/actions/runs/41876458081) passed on source commit `9524342a6c3bef3a7eeaaf54be0f04ad5cc27f68`: 67 unit tests and 71 integration tests, zero failures, errors, or skips. M3's schema, backend APIs, validation and tests are present on `main`.
