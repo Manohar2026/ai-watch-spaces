@@ -39,7 +39,7 @@ class TimelineSchemaValidatorTest {
     @Test
     void rejectsVariationPointWithoutTwoApprovedOptions() throws IOException {
         ObjectNode document = (ObjectNode) sample();
-        document.path("events").get(3).path("options").get(1).withObject().put("approved", false);
+        ((ObjectNode) document.path("events").get(3).path("options").get(1)).put("approved", false);
 
         assertThatThrownBy(() -> validator.validate(document))
                 .isInstanceOf(ApiException.class)
@@ -49,7 +49,7 @@ class TimelineSchemaValidatorTest {
     @Test
     void rejectsVariationPointWithoutExactlyOneApprovedDefault() throws IOException {
         ObjectNode document = (ObjectNode) sample();
-        document.path("events").get(3).path("options").get(1).withObject().put("default", true);
+        ((ObjectNode) document.path("events").get(3).path("options").get(1)).put("default", true);
 
         assertThatThrownBy(() -> validator.validate(document))
                 .isInstanceOf(ApiException.class)
