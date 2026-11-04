@@ -107,7 +107,12 @@ class TimelineDocumentValidator {
                 }
             }
             try {
-                LocaleTags.canonicalize(optionPath + ".locale", option.path("locale").asText());
+                String locale = option.path("locale").asText();
+                String canonicalLocale = LocaleTags.canonicalize(optionPath + ".locale", locale);
+                if (!canonicalLocale.equals(locale)) {
+                    add(errors, optionPath + ".locale", "NON_CANONICAL_LOCALE",
+                            "must use canonical BCP 47 casing (for example, en-IN)");
+                }
             } catch (ApiException e) {
                 add(errors, optionPath + ".locale", "INVALID_LOCALE", "must be a valid BCP 47 language tag");
             }
