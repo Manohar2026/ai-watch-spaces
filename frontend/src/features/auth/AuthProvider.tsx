@@ -42,6 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const currentSession = useRef<AuthSession | null>(null);
   const refreshInFlight = useRef<Promise<void> | null>(null);
 
+  const getAccessToken = useCallback(() => currentSession.current?.accessToken ?? null, []);
+
   const replaceSession = useCallback((next: AuthSession | null) => {
     currentSession.current = next;
     setSession(next);
@@ -177,8 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     refreshAccessToken,
-    getAccessToken: () => currentSession.current?.accessToken ?? null,
-  }), [user, session, isSubmitting, refreshAccessToken]);
+    getAccessToken,
+  }), [user, session, isSubmitting, refreshAccessToken, getAccessToken]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
