@@ -87,7 +87,7 @@ class TimelineQueryService {
             if (!payload.isObject()) {
                 throw new IllegalStateException("Stored timeline payload must be a JSON object.");
             }
-            payload.fields().forEachRemaining(entry -> event.put(entry.getKey(),
+            payload.properties().forEach(entry -> event.put(entry.getKey(),
                     entry.getValue().isNull() ? null : entry.getValue().asText()));
 
             if ("VARIATION_POINT".equals(row.type())) {
