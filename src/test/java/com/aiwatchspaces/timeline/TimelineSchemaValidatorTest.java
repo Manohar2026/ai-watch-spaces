@@ -37,6 +37,16 @@ class TimelineSchemaValidatorTest {
     }
 
     @Test
+    void rejectsOptionsOnARegularSceneEvent() throws IOException {
+        ObjectNode document = (ObjectNode) sample();
+        ((ObjectNode) document.path("events").get(0)).putArray("options");
+
+        assertThatThrownBy(() -> validator.validate(document))
+                .isInstanceOf(ApiException.class)
+                .satisfies(error -> assertThat(((ApiException) error).code()).isEqualTo(ErrorCode.TIMELINE_INVALID));
+    }
+
+    @Test
     void rejectsVariationPointWithoutTwoApprovedOptions() throws IOException {
         ObjectNode document = (ObjectNode) sample();
         ((ObjectNode) document.path("events").get(3).path("options").get(1)).put("approved", false);
