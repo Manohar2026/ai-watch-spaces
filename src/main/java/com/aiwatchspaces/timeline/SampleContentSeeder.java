@@ -131,10 +131,17 @@ class SampleContentSeeder {
             UUID eventId = namedUuid("event:" + TIMELINE_VERSION_ID + ":" + event.path("eventKey").asText());
             JsonNode endNode = event.get("endMs");
             Integer endMs = endNode == null || endNode.isNull() ? null : endNode.asInt();
-            String searchText = event.path("payload").fields().stream()
-                    .filter(entry -> entry.getValue().isTextual())
-                    .map(entry -> entry.getValue().asText())
-                    .reduce((left, right) -> left + " " + right).orElse("");
+            StringBuilder searchText = new StringBuilder();
+            var payloadFields = event.path("payload").fields();
+            while (payloadFields.hasNext()) {
+                var field = payloadFields.next();
+                if (field.getValue().isTextual()) {
+                    if (!searchText.isEmpty()) {
+                        searchText.append(' ');
+                    }
+                    searchText.append(field.getValue().asText());
+                }
+            }
             jdbc.update("""
                     INSERT INTO timeline_events
                         (id, timeline_version_id, event_key, event_type, start_ms, end_ms, payload, search_text)
@@ -149,7 +156,7 @@ class SampleContentSeeder {
                     .addValue("startMs", event.path("startMs").asInt())
                     .addValue("endMs", endMs, Types.INTEGER)
                     .addValue("payload", event.path("payload").toString())
-                    .addValue("searchText", searchText));
+                    .addValue("searchText", searchText.toString()));
 
             if ("VARIATION_POINT".equals(event.path("type").asText())) {
                 ArrayNode options = (ArrayNode) event.path("options");
