@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { catalogApi, formatDuration, type PageResponse, type TitleDetail, type TitleSummary } from './catalogApi';
@@ -92,11 +92,6 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     };
   }, [page, appliedQuery, genre, reloadVersion, getAccessToken, refreshAccessToken]);
 
-  const availableGenres = useMemo(
-    () => [...new Set(result?.items.flatMap((title) => title.genres) ?? [])].sort(),
-    [result],
-  );
-
   async function openTitle(titleId: string) {
     setSelectedTitleId(titleId);
     setSelectedTitle(null);
@@ -165,10 +160,12 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
           </label>
           <label className="catalog-genre">
             <span className="sr-only">Filter by genre</span>
-            <select value={genre} onChange={(event) => { setGenre(event.target.value); setPage(0); }}>
-              <option value="">All genres</option>
-              {availableGenres.map((item) => <option value={item} key={item}>{item}</option>)}
-            </select>
+            <input
+              value={genre}
+              onChange={(event) => { setGenre(event.target.value); setPage(0); }}
+              maxLength={80}
+              placeholder="Genre (optional)"
+            />
           </label>
           <button className="primary-button catalog-search-button" type="submit">Search <span aria-hidden="true">→</span></button>
           {(appliedQuery || genre) && <button className="catalog-clear-button" type="button" onClick={clearFilters}>Clear</button>}
