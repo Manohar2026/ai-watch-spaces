@@ -153,7 +153,7 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 |---|---|---|
 | F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
 | F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
-| F2 | Authentication UI and API integration | Initial register/login/logout/current-user code committed; end-to-end browser verification and refresh/session-restoration design remain open |
+| F2 | Authentication UI and API integration | Register/login/logout/current-user and in-memory automatic refresh code committed; end-to-end browser verification and persistent session-restoration design remain open |
 | F3 | App shell, dashboard and catalogue | Responsive navigation and catalogue/dashboard screens use backend APIs |
 | F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
 | F5 | Player and realtime foundation | WebSocket connection, authoritative playback updates, reconnect/resync |
@@ -195,4 +195,4 @@ The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Wh
 
 ## 11. Immediate next step
 
-Verify F1/F2 locally by installing dependencies, running the TypeScript check, producing a Vite production build, and exercising the M2 auth flows against the running backend. Then complete the refresh/session-restoration threat model before using authenticated APIs for the catalogue and dashboard.
+Verify F2 locally by exercising register/login/profile/automatic refresh/logout against the running backend. Persistent session restoration remains a separate security decision; the current implementation intentionally loses the session on tab reload.
