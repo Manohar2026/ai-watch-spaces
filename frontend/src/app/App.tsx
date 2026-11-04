@@ -1,22 +1,36 @@
-const features = [
-  {
-    number: '01',
-    title: 'Watch in sync',
-    description: 'Create a space, invite friends, and experience playback together.',
-  },
-  {
-    number: '02',
-    title: 'Talk about the moment',
-    description: 'Keep conversations, reactions, and room presence alongside the story.',
-  },
-  {
-    number: '03',
-    title: 'Go beyond the screen',
-    description: 'Explore contextual facts, interactive trivia, and AI-assisted answers.',
-  },
-];
+import { useState } from 'react';
+import { AuthProvider, useAuth } from '../features/auth/AuthProvider';
+import { AuthScreen } from '../features/auth/AuthScreen';
+import { Dashboard } from '../features/dashboard/Dashboard';
 
-function App() {
+type View = 'home' | 'login' | 'register';
+
+function AppContent() {
+  const [view, setView] = useState<View>('home');
+  const [authNotice, setAuthNotice] = useState<string | undefined>();
+  const { user } = useAuth();
+
+  if (user) {
+    return <Dashboard />;
+  }
+
+  if (view !== 'home') {
+    return (
+      <AuthScreen
+        mode={view}
+        notice={authNotice}
+        onModeChange={(mode, notice) => {
+          setAuthNotice(notice);
+          setView(mode);
+        }}
+        onBack={() => {
+          setAuthNotice(undefined);
+          setView('home');
+        }}
+      />
+    );
+  }
+
   return (
     <main className="page-shell">
       <nav className="topbar" aria-label="Main navigation">
@@ -25,7 +39,10 @@ function App() {
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
         <span className="topbar-note">A shared way to experience stories</span>
-        <a className="topbar-link" href="#how-it-works">Explore <span aria-hidden="true">↗</span></a>
+        <div className="topbar-actions">
+          <button className="text-button" type="button" onClick={() => setView('login')}>Sign in</button>
+          <button className="topbar-cta" type="button" onClick={() => setView('register')}>Get started <span aria-hidden="true">↗</span></button>
+        </div>
       </nav>
 
       <section className="hero" aria-labelledby="hero-title">
@@ -37,7 +54,9 @@ function App() {
             and discover more about every moment.
           </p>
           <div className="hero-actions">
-            <a className="primary-button" href="#how-it-works">Discover the experience <span aria-hidden="true">→</span></a>
+            <button className="primary-button" type="button" onClick={() => setView('register')}>
+              Create your account <span aria-hidden="true">→</span>
+            </button>
             <span className="hero-caption">A new kind of shared screen time.</span>
           </div>
         </div>
@@ -74,13 +93,21 @@ function App() {
           <h2 id="feature-title">A space for every kind of fan.</h2>
         </div>
         <div className="feature-grid">
-          {features.map((feature) => (
-            <article className="feature-card" key={feature.number}>
-              <span className="feature-number">{feature.number}</span>
-              <h3>{feature.title}</h3>
-              <p>{feature.description}</p>
-            </article>
-          ))}
+          <article className="feature-card">
+            <span className="feature-number">01</span>
+            <h3>Watch in sync</h3>
+            <p>Create a space, invite friends, and experience playback together.</p>
+          </article>
+          <article className="feature-card">
+            <span className="feature-number">02</span>
+            <h3>Talk about the moment</h3>
+            <p>Keep conversations, reactions, and room presence alongside the story.</p>
+          </article>
+          <article className="feature-card">
+            <span className="feature-number">03</span>
+            <h3>Go beyond the screen</h3>
+            <p>Explore contextual facts, interactive trivia, and AI-assisted answers.</p>
+          </article>
         </div>
       </section>
 
@@ -89,6 +116,14 @@ function App() {
         <span>Made for the moments you share.</span>
       </footer>
     </main>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
