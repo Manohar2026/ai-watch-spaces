@@ -1,25 +1,22 @@
 package com.aiwatchspaces.timeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.Map;
-import java.util.UUID;
 
 import com.aiwatchspaces.support.AuthTestSupport;
 import com.aiwatchspaces.support.IntegrationTest;
-import com.aiwatchspaces.variations.SubtitleTrackResponse;
 import com.aiwatchspaces.infrastructure.db.DbExecutor;
-import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -129,6 +126,17 @@ class CatalogTimelineIT {
                 .jsonPath("$.locale").isEqualTo("en-IN")
                 .jsonPath("$.versionNumber").isEqualTo(1)
                 .jsonPath("$.checksum").isNotEmpty();
+
+        Path immutableAsset = Path.of("target/test-assets/subtitles/the-first-bloom.en.vtt");
+        byte[] originalAsset = Files.readAllBytes(immutableAsset);
+        try {
+            Files.write(immutableAsset, new byte[] {1, 2, 3});
+            assertThatThrownBy(() -> db.call(() -> seeder.seed(account.userId())).block())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("immutable");
+        } finally {
+            Files.write(immutableAsset, originalAsset);
+        }
 
         assertAssetChecksum("the-first-bloom.en.vtt", "en");
         assertAssetChecksum("the-first-bloom.en-IN.vtt", "en-IN");
