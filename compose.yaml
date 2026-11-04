@@ -27,6 +27,9 @@ services:
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env}
       JWT_ISSUER: ${JWT_ISSUER:-ai-watch-spaces}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      AIWS_ASSETS_DIRECTORY: /var/lib/aiws/assets
+      AIWS_SEED_CONTENT_ENABLED: ${AIWS_SEED_CONTENT_ENABLED:-false}
+      AIWS_SEED_CONTENT_UPLOADED_BY: ${AIWS_SEED_CONTENT_UPLOADED_BY:-}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:

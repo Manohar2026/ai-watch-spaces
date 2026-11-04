@@ -1,13 +1,21 @@
-# Claude Code Project Instructions — AI Watch Spaces Backend
+# Project Instructions — AI Watch Spaces
 
-Read `SYSTEM_DESIGN.md` (v0.4) and `DATABASE_SCHEMA.sql` (v0.4) before proposing or changing architecture. They are the design baseline for this backend-only project, **approved by the user on 2026-10-26**. `DATABASE_SCHEMA.sql` is the target state, not a migration.
+Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHEMA.sql` (v0.4) before proposing or changing architecture. `FULL_STACK_ARCHITECTURE.md` is the approved full-stack scope (React + TypeScript frontend with the existing Java/Spring Boot backend). `SYSTEM_DESIGN.md` remains the detailed backend baseline, and `DATABASE_SCHEMA.sql` is the target state, not a migration.
 
-**Current checkpoint:** design v0.4 approved; **M1 and M2 implemented (2026-10-26)** — results in `docs/dependency-versions.md` and `docs/m2-verification.md`; M1 corrections in SYSTEM_DESIGN Appendix D, M2 decisions in Appendix E. Code may be written only in an environment where the checks can actually run (Maven Central and Docker Hub reachable, Docker daemon available). **Do not start M3 or any later milestone without the user's explicit authorization.**
+**Current checkpoint:** backend M1 and M2 implemented (2026-10-26); frontend F0–F2 direction and initial implementation are on `feature/full-stack-architecture`. **Backend M3 was explicitly authorized by the user on 2026-11-04. M4 and later require separate explicit authorization.** The M3 implementation must follow the exact approved v0.4 design and report every verification result honestly.
 
 ## Guardrails
 
-### Scope and architecture
-1. Build **backend-only** (PRD Track B). Do not create React, templates, browser UI or frontend assets.
+### Full-stack application
+
+- Follow `FULL_STACK_ARCHITECTURE.md` for React/Vite structure, frontend feature boundaries, API client conventions, and delivery milestones.
+- Keep frontend API calls behind typed feature-level clients. Do not hard-code API hosts in components; use `VITE_API_BASE_URL` and the Vite `/api` proxy in development.
+- Never expose secrets through `VITE_` variables. Keep access and refresh tokens out of localStorage/sessionStorage/URLs/logs unless a separately approved security design changes the current in-memory policy.
+- Treat the backend as authoritative for identity, authorization, persistence, room state, playback, and vote outcomes. UI must reflect backend confirmations and errors.
+- Use accessible semantic markup and include loading, empty, error, and disabled states.
+
+### Backend scope and architecture
+1. Build the complete full-stack application in this monorepo. Keep the React + TypeScript browser application under `frontend/`; keep the Java/Spring Boot API and backend modules at the repository root. Do not put browser templates or frontend assets inside the backend.
 2. One Java/Spring Boot modular monolith. No microservices or separate deployables.
 3. Stack is pinned (SYSTEM_DESIGN ADR-002):
    - Java 21; Spring Boot **4.1.2** parent; Maven (wrapper).
@@ -81,7 +89,7 @@ Read `SYSTEM_DESIGN.md` (v0.4) and `DATABASE_SCHEMA.sql` (v0.4) before proposing
 - Keep the Postman collection, scripted WebSocket scenarios, seed data, migrations and docs synchronized with the implementation.
 - Check SYSTEM_DESIGN §17 (open decisions) before work that depends on them; ask the user rather than deciding silently.
 
-## Milestones M1–M7 (only when explicitly authorized)
+## Backend milestones M1–M7 (M3 currently authorized; M4+ require separate approval)
 
 | # | Deliverable |
 |---|---|
