@@ -24,7 +24,7 @@ function AppContent() {
     return <Dashboard onBrowseCatalog={() => setView('catalog')} />;
   }
 
-  if (view !== 'home') {
+  if (view === 'login' || view === 'register') {
     return (
       <AuthScreen
         mode={view}
