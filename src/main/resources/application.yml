@@ -57,6 +57,11 @@ aiws:
   realtime:
     health:
       saturation-ratio: 0.9
+  assets:
+    directory: ${AIWS_ASSETS_DIRECTORY:./assets}
+  seed-content:
+    enabled: ${AIWS_SEED_CONTENT_ENABLED:false}
+    uploaded-by: ${AIWS_SEED_CONTENT_UPLOADED_BY:}
 
 logging:
   structured:
