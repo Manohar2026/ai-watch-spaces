@@ -59,7 +59,7 @@ class ApplicationContextIT {
         MigrationInfo[] all = flyway.info().all();
         assertThat(all).isNotEmpty();
         assertThat(Arrays.stream(all).map(MigrationInfo::getState)).allMatch(state -> state == MigrationState.SUCCESS);
-        assertThat(Arrays.stream(all).map(MigrationInfo::getScript)).containsExactly("V1__auth_users.sql");
+        assertThat(Arrays.stream(all).map(MigrationInfo::getScript)).containsExactly("V1__auth_users.sql", "V2__catalog_timeline.sql");
         Integer historyRows = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM public.flyway_schema_history WHERE success", Integer.class);
         assertThat(historyRows).isEqualTo(all.length);
