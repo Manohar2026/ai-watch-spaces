@@ -32,6 +32,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
   const [appliedQuery, setAppliedQuery] = useState('');
   const [genre, setGenre] = useState('');
   const [page, setPage] = useState(0);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [result, setResult] = useState<PageResponse<TitleSummary> | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +90,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [page, appliedQuery, genre, getAccessToken, refreshAccessToken]);
+  }, [page, appliedQuery, genre, reloadVersion, getAccessToken, refreshAccessToken]);
 
   const availableGenres = useMemo(
     () => [...new Set(result?.items.flatMap((title) => title.genres) ?? [])].sort(),
@@ -184,7 +185,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
           <div className="catalog-state catalog-error" role="alert">
             <h2>We couldn't load the catalogue.</h2>
             <p>{error}</p>
-            <button className="primary-button" type="button" onClick={() => setPage((current) => current)}>Try again <span aria-hidden="true">↻</span></button>
+            <button className="primary-button" type="button" onClick={() => setReloadVersion((current) => current + 1)}>Try again <span aria-hidden="true">↻</span></button>
             {error?.includes('session has expired') && <button className="catalog-clear-button" type="button" onClick={() => void logout()}>Sign out</button>}
           </div>
         )}
@@ -238,7 +239,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
         <div className="detail-overlay" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setSelectedTitleId(null);
         }}>
-          <section className="title-detail-panel" role="dialog" aria-modal="true" aria-labelledby="title-detail-heading">
+          <section className="title-detail-panel" role="dialog" aria-modal="true" aria-label="Title details">
             <button className="detail-close" type="button" onClick={() => setSelectedTitleId(null)} aria-label="Close title details">×</button>
             {detailState === 'loading' && <div className="catalog-state" role="status"><span className="loading-orbit" /><p>Loading title…</p></div>}
             {detailState === 'error' && <div className="catalog-state catalog-error" role="alert"><h2>Couldn't load title details.</h2><p>{detailError}</p></div>}
@@ -253,9 +254,18 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
                   <div><dt>Slug</dt><dd>{selectedTitle.slug}</dd></div>
                   <div><dt>Genres</dt><dd>{selectedTitle.genres.join(', ') || 'Not specified'}</dd></div>
                 </dl>
-                <a className="detail-asset-link" href={selectedTitle.videoAssetUri} target="_blank" rel="noreferrer">
-                  Open sample media <span aria-hidden="true">↗</span>
-                </a>
+                {(() => {
+                  try {
+                    const mediaUrl = new URL(selectedTitle.videoAssetUri);
+                    return (mediaUrl.protocol === 'https:' || mediaUrl.protocol === 'http:') ? (
+                      <a className="detail-asset-link" href={mediaUrl.href} target="_blank" rel="noreferrer">
+                        Open sample media <span aria-hidden="true">↗</span>
+                      </a>
+                    ) : null;
+                  } catch {
+                    return null;
+                  }
+                })()}
                 <p className="detail-note">This title is available in the catalogue. Watch-space creation and synchronized playback will be added in a later milestone.</p>
               </>
             )}
