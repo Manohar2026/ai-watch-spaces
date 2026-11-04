@@ -7,10 +7,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.text.Normalizer;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Types;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -136,12 +138,14 @@ class SampleContentSeeder {
             while (payloadFields.hasNext()) {
                 var field = payloadFields.next();
                 if (field.getValue().isTextual()) {
-                    if (!searchText.isEmpty()) {
+                    if (searchText.length() > 0) {
                         searchText.append(' ');
                     }
                     searchText.append(field.getValue().asText());
                 }
             }
+            String normalizedSearchText = Normalizer.normalize(searchText.toString(), Normalizer.Form.NFC)
+                    .toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").strip();
             jdbc.update("""
                     INSERT INTO timeline_events
                         (id, timeline_version_id, event_key, event_type, start_ms, end_ms, payload, search_text)
@@ -156,7 +160,7 @@ class SampleContentSeeder {
                     .addValue("startMs", event.path("startMs").asInt())
                     .addValue("endMs", endMs, Types.INTEGER)
                     .addValue("payload", event.path("payload").toString())
-                    .addValue("searchText", searchText.toString()));
+                    .addValue("searchText", normalizedSearchText));
 
             if ("VARIATION_POINT".equals(event.path("type").asText())) {
                 ArrayNode options = (ArrayNode) event.path("options");
