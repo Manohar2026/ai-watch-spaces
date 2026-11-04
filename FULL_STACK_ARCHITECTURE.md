@@ -195,4 +195,4 @@ The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Wh
 
 ## 11. Immediate next step
 
-Verify F2 locally by exercising register/login/profile/automatic refresh/logout against the running backend. Persistent session restoration remains a separate security decision; the current implementation intentionally loses the session on tab reload.
+Next, build the React catalogue experience against the published-title read API introduced in backend M3. Separately, verify registration/login/profile/automatic refresh/logout against a locally running backend. Persistent session restoration remains a separate security decision; the current implementation intentionally loses the session on tab reload.
