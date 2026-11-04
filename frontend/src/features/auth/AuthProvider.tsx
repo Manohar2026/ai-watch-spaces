@@ -62,6 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // The backend rotates refresh tokens. Only one refresh may run at a time,
         // otherwise replay detection intentionally revokes the whole token family.
         const pair = await authApi.refresh(existing.refreshToken);
+        // A sign-out or replacement session may have happened while the request was in flight.
+        if (currentSession.current !== existing) {
+          return;
+        }
         const nextSession = toSession(pair);
         replaceSession(nextSession);
 
@@ -147,6 +151,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    // Wait for an in-flight rotation so logout revokes the newest token, not the one it replaced.
+    const pendingRefresh = refreshInFlight.current;
+    if (pendingRefresh) {
+      await pendingRefresh.catch(() => undefined);
+    }
     const refreshToken = currentSession.current?.refreshToken;
     // Clear local application state even when the network request fails.
     replaceSession(null);
