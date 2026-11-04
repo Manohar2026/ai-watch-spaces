@@ -152,8 +152,8 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
-| F1 | React + TypeScript + Vite scaffold | Scaffold committed; local dependency install, typecheck and production build still need to pass |
-| F2 | Authentication UI and API integration | Register/login/logout/current-user flows work against M2; token handling reviewed |
+| F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
+| F2 | Authentication UI and API integration | Initial register/login/logout/current-user integration code committed; end-to-end verification and refresh/session-restoration design remain open |
 | F3 | App shell, dashboard and catalogue | Responsive navigation and catalogue/dashboard screens use backend APIs |
 | F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
 | F5 | Player and realtime foundation | WebSocket connection, authoritative playback updates, reconnect/resync |
@@ -195,4 +195,4 @@ The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Wh
 
 ## 11. Immediate next step
 
-Verify F1 locally by installing dependencies, running the TypeScript check, and producing a Vite production build. Once those pass, begin F2: integrate the existing M2 authentication APIs, after reviewing the backend request/response DTOs and the browser token-handling threat model.
+Verify F1/F2 locally by installing dependencies, running the TypeScript check, producing a Vite production build, and exercising the M2 auth flows against the running backend. Then complete the refresh/session-restoration threat model before using authenticated APIs for the catalogue and dashboard.
