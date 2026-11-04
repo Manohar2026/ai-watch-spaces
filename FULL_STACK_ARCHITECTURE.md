@@ -154,7 +154,7 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 | F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
 | F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
 | F2 | Authentication UI and API integration | Register/login/logout/current-user and in-memory automatic refresh code committed; end-to-end browser verification and persistent session-restoration design remain open |
-| F3 | App shell, dashboard and catalogue | Initial React catalogue UI consumes the published-title list/detail APIs; CI and local browser verification pending |
+| F3 | App shell, dashboard and catalogue | Initial catalogue UI is on `main`; follow-up UX and retry refinements are in PR #5, with CI/local browser verification pending |
 | F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
 | F5 | Player and realtime foundation | WebSocket connection, authoritative playback updates, reconnect/resync |
 | F6 | Chat and presence | Ordered history, live messages, typing, reactions and presence |
@@ -195,4 +195,4 @@ The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Wh
 
 ## 11. Immediate next step
 
-Complete F3 by passing frontend CI and verifying the catalogue/search/detail flow against a locally running backend. Separately, verify registration/login/profile/automatic refresh/logout against a locally running backend. Persistent session restoration remains a separate security decision; the current implementation intentionally loses the session on tab reload.
+Complete F3 by passing PR #5 frontend CI and verifying the catalogue/search/detail flow against a locally running backend. Separately, verify registration/login/profile/automatic refresh/logout against a locally running backend. Persistent session restoration remains a separate security decision; the current implementation intentionally loses the session on tab reload.
