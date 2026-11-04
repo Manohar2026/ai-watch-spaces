@@ -20,6 +20,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).
+- **Backend M3 (in progress):** Flyway V2, timeline JSON Schema v1, sample title/timeline/subtitles, published catalogue and timeline/subtitle read APIs. See [docs/m3-catalog-timeline.md](docs/m3-catalog-timeline.md).
 - **Frontend F0:** full-stack architecture documented.
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; automated/local build verification is pending.
 - **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; end-to-end browser verification is pending.
@@ -49,7 +50,7 @@ docker compose up -d --build
 curl localhost:8080/actuator/health/readiness
 ```
 
-The backend configuration is documented in [docs/dependency-versions.md](docs/dependency-versions.md), [docs/m2-verification.md](docs/m2-verification.md), and `.env.example`.
+The backend configuration is documented in [docs/dependency-versions.md](docs/dependency-versions.md), [docs/m2-verification.md](docs/m2-verification.md), [docs/m3-catalog-timeline.md](docs/m3-catalog-timeline.md), and `.env.example`.
 
 ## Frontend local run
 
