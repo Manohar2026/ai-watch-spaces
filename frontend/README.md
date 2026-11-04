@@ -43,6 +43,8 @@ npm run preview
 - Automatic access-token refresh using `POST /api/v1/auth/refresh` before expiry; refresh requests are single-flight to avoid triggering backend replay detection.
 - Logout via `POST /api/v1/auth/logout` using the most recently rotated refresh token in the request body.
 - Typed API error handling using the backend error envelope.
+- Authenticated catalogue browsing with server-side title search, genre filters, pagination, and title details.
+- Title details include the current timeline range, approved variation labels, and active default-locale subtitle-track metadata.
 
 Tokens are kept in React memory only. Access tokens are refreshed automatically while the tab remains open; reloading the tab still loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
 
