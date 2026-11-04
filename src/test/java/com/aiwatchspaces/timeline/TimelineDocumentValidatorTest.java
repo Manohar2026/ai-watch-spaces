@@ -80,6 +80,14 @@ class TimelineDocumentValidatorTest {
     }
 
     @Test
+    void rejectsNonCanonicalLocaleCasing() throws IOException {
+        ObjectNode document = (ObjectNode) sample();
+        ((ObjectNode) document.path("events").get(3).path("options").get(1)).put("locale", "en-in");
+
+        assertInvalid(document, Map.of(), "NON_CANONICAL_LOCALE");
+    }
+
+    @Test
     void rejectsSubtitleTrackSwapFromAnotherTitle() throws IOException {
         ObjectNode document = (ObjectNode) sample();
         ObjectNode variation = (ObjectNode) document.path("events").get(3);
