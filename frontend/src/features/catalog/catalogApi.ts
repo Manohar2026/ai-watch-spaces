@@ -23,6 +23,40 @@ export interface TitleDetail extends TitleSummary {
   updatedAt: string;
 }
 
+export interface TimelineOption {
+  id: string;
+  label: string;
+}
+
+export interface TimelineEvent {
+  eventId: string;
+  eventKey: string;
+  type: string;
+  ts: number;
+  startMs: number;
+  endMs: number | null;
+  title?: string;
+  summary?: string;
+  text?: string;
+  term?: string;
+  definition?: string;
+  options?: TimelineOption[];
+}
+
+export interface TimelineResponse {
+  titleId: string;
+  timelineVersionId: string;
+  events: TimelineEvent[];
+}
+
+export interface SubtitleTrack {
+  trackId: string;
+  locale: string;
+  versionNumber: number;
+  assetUri: string;
+  checksum: string;
+}
+
 export interface CatalogFilters {
   page: number;
   size: number;
@@ -54,6 +88,22 @@ export const catalogApi = {
 
   get(accessToken: string, titleId: string): Promise<TitleDetail> {
     return authenticatedGet<TitleDetail>(`/titles/${encodeURIComponent(titleId)}`, accessToken);
+  },
+
+  getTimeline(accessToken: string, titleId: string, fromSeconds: number, toSeconds: number): Promise<TimelineResponse> {
+    const params = new URLSearchParams({ from: String(fromSeconds), to: String(toSeconds) });
+    return authenticatedGet<TimelineResponse>(
+      `/titles/${encodeURIComponent(titleId)}/timeline?${params.toString()}`,
+      accessToken,
+    );
+  },
+
+  getSubtitleTrack(accessToken: string, titleId: string, locale?: string): Promise<SubtitleTrack> {
+    const suffix = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+    return authenticatedGet<SubtitleTrack>(
+      `/titles/${encodeURIComponent(titleId)}/subtitles${suffix}`,
+      accessToken,
+    );
   },
 };
 
