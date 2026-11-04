@@ -65,7 +65,7 @@ class TimelineDocumentValidator {
                 }
             }
 
-            validatePlainText(event.path("payload"), path + ".payload", errors);
+            validatePlainTextStrings(event, path, errors);
             if ("VARIATION_POINT".equals(event.path("type").asText())) {
                 validateVariationPoint(event, path, expectedTitleId, defaultLocale,
                         defaultLocaleCueKeys, subtitleTracks, errors);
@@ -146,20 +146,24 @@ class TimelineDocumentValidator {
         }
     }
 
-    private static void validatePlainText(JsonNode node, String path, List<ErrorDetail> errors) {
-        if (!node.isObject()) {
+    private static void validatePlainTextStrings(JsonNode node, String path, List<ErrorDetail> errors) {
+        if (node.isTextual()) {
+            try {
+                PlainText.normalize(path, node.asText(), 1, 20_000);
+            } catch (ApiException e) {
+                add(errors, path, "PLAIN_TEXT_REQUIRED",
+                        "must be valid plain text without markup or control characters");
+            }
             return;
         }
-        node.fields().forEachRemaining(entry -> {
-            if (entry.getValue().isTextual()) {
-                try {
-                    PlainText.normalize(path + "." + entry.getKey(), entry.getValue().asText(), 1, 20_000);
-                } catch (ApiException e) {
-                    add(errors, path + "." + entry.getKey(), "PLAIN_TEXT_REQUIRED",
-                            "must be valid plain text without markup or control characters");
-                }
+        if (node.isObject()) {
+            node.fields().forEachRemaining(entry ->
+                    validatePlainTextStrings(entry.getValue(), path + "." + entry.getKey(), errors));
+        } else if (node.isArray()) {
+            for (int index = 0; index < node.size(); index++) {
+                validatePlainTextStrings(node.get(index), path + "[" + index + "]", errors);
             }
-        });
+        }
     }
 
     private static void add(List<ErrorDetail> errors, String field, String code, String message) {
