@@ -97,6 +97,13 @@ export const authApi = {
     });
   },
 
+  refresh(refreshToken: string): Promise<TokenPair> {
+    return request<TokenPair>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    });
+  },
+
   me(accessToken: string): Promise<UserProfile> {
     return request<UserProfile>('/me', {
       headers: { Authorization: `Bearer ${accessToken}` },
