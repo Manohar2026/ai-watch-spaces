@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
-import { catalogApi, formatDuration, type PageResponse, type TitleDetail, type TitleSummary } from './catalogApi';
+import { catalogApi, formatDuration, type PageResponse, type SubtitleTrack, type TimelineEvent, type TimelineResponse, type TitleDetail, type TitleSummary } from './catalogApi';
 
 const PAGE_SIZE = 12;
 
@@ -26,6 +26,26 @@ function friendlyError(error: unknown): string {
   return 'The catalogue could not be loaded. Check your connection and try again.';
 }
 
+function formatTimelineTime(seconds: number): string {
+  const value = Math.max(0, Math.floor(seconds));
+  return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+}
+
+function timelineEventTitle(event: TimelineEvent): string {
+  if (event.type === 'SCENE') return event.title || 'Scene';
+  if (event.type === 'TRIVIA') return 'Trivia';
+  if (event.type === 'GLOSSARY') return event.term || 'Glossary';
+  if (event.type === 'VARIATION_POINT') return 'Subtitle variation';
+  return event.type.replaceAll('_', ' ').toLowerCase();
+}
+
+function timelineEventDescription(event: TimelineEvent): string | null {
+  if (event.type === 'SCENE') return event.summary || null;
+  if (event.type === 'TRIVIA') return event.text || null;
+  if (event.type === 'GLOSSARY') return event.definition || null;
+  return null;
+}
+
 export function CatalogPage({ onBack }: CatalogPageProps) {
   const { getAccessToken, refreshAccessToken, logout } = useAuth();
   const [query, setQuery] = useState('');
@@ -41,6 +61,13 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
   const [selectedTitle, setSelectedTitle] = useState<TitleDetail | null>(null);
   const [detailState, setDetailState] = useState<LoadState>('ready');
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
+  const [timelineState, setTimelineState] = useState<LoadState>('ready');
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [subtitle, setSubtitle] = useState<SubtitleTrack | null>(null);
+  const [subtitleState, setSubtitleState] = useState<LoadState>('ready');
+  const [subtitleError, setSubtitleError] = useState<string | null>(null);
+  const detailLoadId = useRef(0);
 
   async function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
     let token = getAccessToken();
@@ -93,19 +120,74 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     };
   }, [page, appliedQuery, appliedGenre, reloadVersion, getAccessToken, refreshAccessToken]);
 
+  function closeTitleDetails() {
+    detailLoadId.current += 1;
+    setSelectedTitleId(null);
+    setSelectedTitle(null);
+    setTimeline(null);
+    setSubtitle(null);
+  }
+
   async function openTitle(titleId: string) {
+    const loadId = ++detailLoadId.current;
     setSelectedTitleId(titleId);
     setSelectedTitle(null);
     setDetailError(null);
     setDetailState('loading');
+    setTimeline(null);
+    setTimelineState('loading');
+    setTimelineError(null);
+    setSubtitle(null);
+    setSubtitleState('loading');
+    setSubtitleError(null);
+
+    let detail: TitleDetail;
     try {
-      const detail = await authorized((token) => catalogApi.get(token, titleId));
-      setSelectedTitle(detail);
-      setDetailState('ready');
+      detail = await authorized((token) => catalogApi.get(token, titleId));
     } catch (detailLoadError) {
-      setDetailError(friendlyError(detailLoadError));
-      setDetailState('error');
+      if (loadId === detailLoadId.current) {
+        setDetailError(friendlyError(detailLoadError));
+        setDetailState('error');
+      }
+      return;
     }
+
+    if (loadId !== detailLoadId.current) {
+      return;
+    }
+    setSelectedTitle(detail);
+    setDetailState('ready');
+
+    // M3 uses seconds for range bounds and caps each request at one hour.
+    const toSeconds = Math.min(Math.ceil(detail.durationMs / 1_000), 3_600);
+    await Promise.all([
+      authorized((token) => catalogApi.getTimeline(token, titleId, 0, toSeconds))
+        .then((response) => {
+          if (loadId === detailLoadId.current) {
+            setTimeline(response);
+            setTimelineState('ready');
+          }
+        })
+        .catch((timelineLoadError: unknown) => {
+          if (loadId === detailLoadId.current) {
+            setTimelineError(friendlyError(timelineLoadError));
+            setTimelineState('error');
+          }
+        }),
+      authorized((token) => catalogApi.getSubtitleTrack(token, titleId, detail.defaultLocale))
+        .then((response) => {
+          if (loadId === detailLoadId.current) {
+            setSubtitle(response);
+            setSubtitleState('ready');
+          }
+        })
+        .catch((subtitleLoadError: unknown) => {
+          if (loadId === detailLoadId.current) {
+            setSubtitleError(friendlyError(subtitleLoadError));
+            setSubtitleState('error');
+          }
+        }),
+    ]);
   }
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
@@ -237,10 +319,10 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
 
       {selectedTitleId && (
         <div className="detail-overlay" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setSelectedTitleId(null);
+          if (event.target === event.currentTarget) closeTitleDetails();
         }}>
           <section className="title-detail-panel" role="dialog" aria-modal="true" aria-label="Title details">
-            <button className="detail-close" type="button" onClick={() => setSelectedTitleId(null)} aria-label="Close title details">×</button>
+            <button className="detail-close" type="button" onClick={closeTitleDetails} aria-label="Close title details">×</button>
             {detailState === 'loading' && <div className="catalog-state" role="status"><span className="loading-orbit" /><p>Loading title…</p></div>}
             {detailState === 'error' && <div className="catalog-state catalog-error" role="alert"><h2>Couldn't load title details.</h2><p>{detailError}</p></div>}
             {detailState === 'ready' && selectedTitle && (
@@ -266,7 +348,57 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
                     return null;
                   }
                 })()}
-                <p className="detail-note">This title is available in the catalogue. Watch-space creation and synchronized playback will be added in a later milestone.</p>
+                <p className="detail-note">This title is available in the catalogue. Watch-space creation and synchronized playback will be added in a later milestone. The media link, when present, opens externally; it is not an in-app player.</p>
+
+                <div className="title-extras">
+                  <section className="title-extra-card" aria-labelledby="timeline-title">
+                    <p className="eyebrow">BEHIND THE MOMENTS</p>
+                    <h3 id="timeline-title">Story timeline</h3>
+                    {timelineState === 'loading' && <p className="extra-muted">Loading timeline events…</p>}
+                    {timelineState === 'error' && <p className="extra-muted" role="status">{timelineError}</p>}
+                    {timelineState === 'ready' && timeline?.events.length ? (
+                      <ol className="detail-timeline">
+                        {timeline.events.map((event) => (
+                          <li key={event.eventId}>
+                            <span className="detail-timeline-time">{formatTimelineTime(event.ts)}</span>
+                            <div>
+                              <span className="detail-event-type">{event.type.replaceAll('_', ' ')}</span>
+                              <h4>{timelineEventTitle(event)}</h4>
+                              {timelineEventDescription(event) && <p>{timelineEventDescription(event)}</p>}
+                              {event.options && event.options.length > 0 && (
+                                <div className="detail-variation-options">
+                                  <span>Approved alternatives</span>
+                                  {event.options.map((option) => <span key={option.id}>{option.label}</span>)}
+                                </div>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : timelineState === 'ready' ? (
+                      <p className="extra-muted">No timeline events are currently published.</p>
+                    ) : null}
+                    {selectedTitle.durationMs > 3_600_000 && (
+                      <p className="extra-footnote">Showing the first 60 minutes. The API limits each timeline request to a 3,600-second range.</p>
+                    )}
+                  </section>
+
+                  <section className="title-extra-card" aria-labelledby="subtitle-title">
+                    <p className="eyebrow">LANGUAGE</p>
+                    <h3 id="subtitle-title">Subtitle track</h3>
+                    {subtitleState === 'loading' && <p className="extra-muted">Loading subtitle metadata…</p>}
+                    {subtitleState === 'error' && <p className="extra-muted" role="status">{subtitleError}</p>}
+                    {subtitleState === 'ready' && subtitle && (
+                      <>
+                        <span className="subtitle-track-locale">{subtitle.locale}</span>
+                        <p className="extra-muted">Active track · version {subtitle.versionNumber}</p>
+                        <p className="subtitle-track-asset">{subtitle.assetUri}</p>
+                        <p className="subtitle-track-checksum">SHA-256 · {subtitle.checksum}</p>
+                      </>
+                    )}
+                    <p className="extra-footnote">M3 returns active track metadata. Subtitle VTT file bytes are not served over HTTP yet.</p>
+                  </section>
+                </div>
               </>
             )}
           </section>
