@@ -3,7 +3,7 @@ package com.aiwatchspaces.timeline;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.Set;
+import java.util.List;
 
 import com.aiwatchspaces.common.error.ApiException;
 import com.aiwatchspaces.common.error.ErrorCode;
@@ -34,7 +34,7 @@ class TimelineSchemaValidator {
     }
 
     void validate(JsonNode document) {
-        Set<?> errors = schema.validate(document);
+        List<com.networknt.schema.Error> errors = schema.validate(document);
         if (!errors.isEmpty()) {
             throw new ApiException(ErrorCode.TIMELINE_INVALID, "Timeline metadata is invalid.",
                     List.of(new ErrorDetail("document", "JSON_SCHEMA", errors.toString())));
