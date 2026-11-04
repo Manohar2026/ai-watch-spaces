@@ -59,7 +59,7 @@ Tokens are held only in React memory. They are not written to `localStorage`, `s
 Consequences:
 
 - Reloading or closing the tab loses the browser's access to the current session.
-- The refresh endpoint is not yet called automatically when an access token expires.
+- Refresh-token rotation is automatic only while the browser tab remains open.
 - A failed logout network call clears the UI locally, but the server-side refresh token can remain active until its expiry.
 - This is an intentionally limited development-stage approach, not a complete production session-restoration design.
 
@@ -77,6 +77,7 @@ Run the backend with PostgreSQL and a valid `JWT_SIGNING_KEY`, then run the fron
 2. Login with that account → HTTP 200, followed by authenticated `GET /me`.
 3. Wrong password → safe `INVALID_CREDENTIALS` message.
 4. Sign out → HTTP 204; the browser returns to the landing page.
-5. Replay or invalid refresh behavior remains controlled by backend tests; the browser does not yet expose refresh-session recovery.
+7. Wait until shortly before access-token expiry and confirm the frontend sends one refresh request and subsequent `/me` calls still succeed.
+8. Confirm a refresh-token replay/revocation 401 clears the local session.
 
 No end-to-end browser test has been run from this environment.
