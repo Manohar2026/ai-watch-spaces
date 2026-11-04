@@ -31,6 +31,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [genre, setGenre] = useState('');
+  const [appliedGenre, setAppliedGenre] = useState('');
   const [page, setPage] = useState(0);
   const [reloadVersion, setReloadVersion] = useState(0);
   const [result, setResult] = useState<PageResponse<TitleSummary> | null>(null);
@@ -72,7 +73,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
           page,
           size: PAGE_SIZE,
           query: appliedQuery,
-          genre,
+          genre: appliedGenre,
         }));
         if (!cancelled) {
           setResult(response);
@@ -90,7 +91,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [page, appliedQuery, genre, reloadVersion, getAccessToken, refreshAccessToken]);
+  }, [page, appliedQuery, appliedGenre, reloadVersion, getAccessToken, refreshAccessToken]);
 
   async function openTitle(titleId: string) {
     setSelectedTitleId(titleId);
@@ -111,12 +112,14 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     event.preventDefault();
     setPage(0);
     setAppliedQuery(query.trim());
+    setAppliedGenre(genre.trim());
   }
 
   function clearFilters() {
     setQuery('');
     setAppliedQuery('');
     setGenre('');
+    setAppliedGenre('');
     setPage(0);
   }
 
@@ -162,7 +165,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
             <span className="sr-only">Filter by genre</span>
             <input
               value={genre}
-              onChange={(event) => { setGenre(event.target.value); setPage(0); }}
+              onChange={(event) => setGenre(event.target.value)}
               maxLength={80}
               placeholder="Genre (optional)"
             />
