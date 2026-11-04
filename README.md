@@ -21,8 +21,9 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).
 - **Frontend F0:** full-stack architecture documented.
-- **Frontend F1:** React + TypeScript + Vite scaffold committed; local dependency installation and build verification are still pending.
-- **Next:** verify F1 locally, then integrate the existing M2 authentication APIs into the frontend.
+- **Frontend F1:** React + TypeScript + Vite scaffold committed; automated/local build verification is pending.
+- **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, and an in-memory auth session implemented; end-to-end verification is pending.
+- **Next:** run frontend checks, then add refresh handling and a reviewed session-restoration design before building catalogue/dashboard APIs.
 
 Backend verification results are recorded in [docs/m2-verification.md](docs/m2-verification.md). Those are repository-recorded results; run the commands below to verify the current checkout yourself.
 
@@ -61,7 +62,7 @@ npm run dev
 
 Open http://localhost:5173. The Vite development server proxies `/api/*` to the backend at http://localhost:8080. Run `npm run typecheck` and `npm run build` to verify the frontend. See [frontend/README.md](frontend/README.md) for details.
 
-The current frontend is a visual scaffold only. Authentication and product features will be connected incrementally; do not treat the landing screen as evidence that backend integration is complete.
+The frontend now includes working integration code for the M2 authentication contract. The browser flow has not yet been run end-to-end against a local backend, so verify it before treating F2 as complete. See [docs/frontend-auth.md](docs/frontend-auth.md) for the exact contract and token-handling limitations.
 
 ## Product and data boundaries
 
