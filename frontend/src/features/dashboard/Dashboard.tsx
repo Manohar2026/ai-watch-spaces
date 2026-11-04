@@ -1,6 +1,6 @@
 import { useAuth } from '../auth/AuthProvider';
 
-export function Dashboard() {
+export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
   const { user, logout, isSubmitting } = useAuth();
 
   if (!user) {
@@ -43,11 +43,17 @@ export function Dashboard() {
           </dl>
         </article>
 
+        <div className="dashboard-actions">
+          <button className="primary-button" type="button" onClick={onBrowseCatalog}>
+            Browse catalogue <span aria-hidden="true">→</span>
+          </button>
+        </div>
+
         <div className="next-step-card">
           <span className="next-step-icon">✦</span>
           <div>
             <h3>Authentication is connected.</h3>
-            <p>Next we’ll add your recent watch spaces and catalogue using real backend API endpoints.</p>
+            <p>Your catalogue now loads from the Spring Boot API. Watch spaces and room history will arrive in later milestones.</p>
           </div>
         </div>
       </section>
