@@ -1,17 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '../features/auth/AuthProvider';
 import { AuthScreen } from '../features/auth/AuthScreen';
 import { Dashboard } from '../features/dashboard/Dashboard';
+import { CatalogPage } from '../features/catalog/CatalogPage';
 
-type View = 'home' | 'login' | 'register';
+type View = 'home' | 'login' | 'register' | 'catalog';
 
 function AppContent() {
   const [view, setView] = useState<View>('home');
   const [authNotice, setAuthNotice] = useState<string | undefined>();
   const { user } = useAuth();
 
+  useEffect(() => {
+    if (!user && view === 'catalog') {
+      setView('home');
+    }
+  }, [user, view]);
+
   if (user) {
-    return <Dashboard />;
+    if (view === 'catalog') {
+      return <CatalogPage onBack={() => setView('home')} />;
+    }
+    return <Dashboard onBrowseCatalog={() => setView('catalog')} />;
   }
 
   if (view !== 'home') {
