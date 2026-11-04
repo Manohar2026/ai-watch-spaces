@@ -11,7 +11,7 @@ AI Watch Spaces is a full-stack web application for people to discover content, 
 The project will be delivered as one Git repository containing two separately built applications:
 
 - **Backend:** the existing Java 21 / Spring Boot 4.1.2 modular monolith, retained at the repository root.
-- **Frontend:** a new React + TypeScript single-page application, located in `frontend/`.
+- **Frontend:** a React + TypeScript single-page application built with Vite, located in `frontend/`.
 
 The application uses original/sample catalogue data and self-created or lawfully usable media. Netflix is a product inspiration only; there is no integration with Netflix infrastructure, accounts, catalogue, or user data.
 
@@ -48,14 +48,14 @@ The frontend and backend are separate deployable applications, but they are deve
 | Area | Decision |
 |---|---|
 | Language | TypeScript |
-| UI | React |
-| Build and development server | Vite |
-| Routing | React Router |
-| Server state and caching | TanStack Query |
-| HTTP | A shared typed API client using fetch or Axios; choose one during frontend scaffold |
+| UI | React 19 |
+| Build and development server | Vite 8 |
+| Routing | React Router (add when page navigation is implemented) |
+| Server state and caching | TanStack Query (add when API integration begins) |
+| HTTP | Shared typed API client; choose fetch or Axios during auth integration |
 | Realtime | Native browser WebSocket API behind a feature-level client |
 | Styling | Responsive CSS with reusable design tokens and components |
-| Tests | Vitest and React Testing Library; browser-level tests can be added when the core flows stabilize |
+| Tests | Vitest and React Testing Library; browser-level tests can be added when core flows stabilize |
 
 Keep dependencies lean. Add a library only when a concrete feature needs it.
 
@@ -74,11 +74,11 @@ Do not replace the backend stack or reorganize its source tree as part of the fr
 
 ## 4. Repository layout
 
-The target layout is:
+The current frontend scaffold is intentionally small. The target layout is:
 
 ```text
 ai-watch-spaces/
-├── frontend/                 # React + TypeScript + Vite application
+├── frontend/
 │   ├── public/
 │   ├── src/
 │   │   ├── app/               # App bootstrap, router, providers
@@ -94,7 +94,7 @@ ai-watch-spaces/
 ├── docs/
 ├── scripts/
 ├── pom.xml
-├── SYSTEM_DESIGN.md           # Existing detailed backend design baseline
+├── SYSTEM_DESIGN.md
 ├── DATABASE_SCHEMA.sql
 ├── FULL_STACK_ARCHITECTURE.md
 └── README.md
@@ -126,7 +126,8 @@ The backend remains authoritative for permissions, room state, playback sequenci
 ## 6. API and realtime integration
 
 - REST API base path remains `/api/v1`.
-- The frontend must use a single configured API base URL; do not hard-code URLs throughout feature components.
+- The frontend uses `VITE_API_BASE_URL` for its API base URL; local default is `/api/v1`.
+- Vite proxies `/api/*` to the local Spring Boot server at `http://localhost:8080`.
 - Authenticated REST calls send the access token as a Bearer token, consistent with the existing backend contract.
 - The current M2 refresh endpoint accepts a refresh token in its request body. The browser integration must respect that contract until a separately reviewed security decision changes it.
 - Do not put access tokens or refresh tokens in source code, build-time public configuration, URLs, logs, or analytics events.
@@ -150,8 +151,8 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 
 | Milestone | Scope | Exit criteria |
 |---|---|---|
-| F0 | Full-stack architecture and repository conventions | This addendum agreed; frontend/backend boundaries documented |
-| F1 | React + TypeScript + Vite scaffold | Frontend starts, builds, lint/tests run, environment config works |
+| F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
+| F1 | React + TypeScript + Vite scaffold | Scaffold committed; local dependency install, typecheck and production build still need to pass |
 | F2 | Authentication UI and API integration | Register/login/logout/current-user flows work against M2; token handling reviewed |
 | F3 | App shell, dashboard and catalogue | Responsive navigation and catalogue/dashboard screens use backend APIs |
 | F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
@@ -169,11 +170,22 @@ The intended local developer experience is:
 
 - PostgreSQL and backend dependencies started with the existing Docker Compose setup.
 - Backend started with the existing Maven wrapper.
-- Frontend started independently from `frontend/` using the package manager and scripts recorded in its `package.json`.
-- Frontend development server proxies `/api` and the agreed WebSocket path to the backend where practical, reducing local CORS friction.
+- Frontend started independently from `frontend/` using npm.
+- Frontend development server proxies `/api` to the backend where practical, reducing local CORS friction.
 - Environment files contain only local configuration and remain git-ignored; secrets are never committed.
 
-Exact frontend scripts, ports, proxy paths, and environment variable names will be recorded when F1 is scaffolded.
+Frontend commands:
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+npm run typecheck
+npm run build
+```
+
+The frontend development server uses port 5173 and proxies `/api` to `http://localhost:8080`. Exact WebSocket proxy paths will be added only after confirming the backend endpoint contract.
 
 ## 10. Scope and change control
 
@@ -183,4 +195,4 @@ The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Wh
 
 ## 11. Immediate next step
 
-Implement F1: create the React + TypeScript + Vite application under `frontend/`, add minimal developer documentation, and verify its build independently without changing the existing backend build.
+Verify F1 locally by installing dependencies, running the TypeScript check, and producing a Vite production build. Once those pass, begin F2: integrate the existing M2 authentication APIs, after reviewing the backend request/response DTOs and the browser token-handling threat model.
