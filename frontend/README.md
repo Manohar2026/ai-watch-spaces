@@ -45,4 +45,4 @@ npm run preview
 
 Tokens are kept in React memory only. Refresh-token rotation is not yet used by the UI, and reloading the tab loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
 
-These flows are implemented but have not yet been verified end-to-end from this environment.
+The frontend CI has passed dependency installation, `npm run typecheck`, and `npm run build`. These flows have not yet been verified end-to-end against a locally running backend.
