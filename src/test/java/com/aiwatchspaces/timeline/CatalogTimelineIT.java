@@ -94,9 +94,9 @@ class CatalogTimelineIT {
                 .jsonPath("$.timelineVersionId").isEqualTo(SampleContentSeeder.TIMELINE_VERSION_ID.toString())
                 .jsonPath("$.events.length()").isEqualTo(4)
                 .jsonPath("$.events[0].startMs").isEqualTo(0)
-                .jsonPath("$.events[0].ts").isEqualTo(0)
+                .jsonPath("$.events[0].ts").value(value -> assertThat(((Number) value).doubleValue()).isEqualTo(0.0))
                 .jsonPath("$.events[3].startMs").isEqualTo(2_000)
-                .jsonPath("$.events[3].ts").isEqualTo(2);
+                .jsonPath("$.events[3].ts").value(value -> assertThat(((Number) value).doubleValue()).isEqualTo(2.0));
 
         // The range [2s, 2s] includes the scene interval and the point event at 2s only.
         client.get().uri("/api/v1/titles/" + SampleContentSeeder.TITLE_ID + "/timeline?from=2&to=2")
