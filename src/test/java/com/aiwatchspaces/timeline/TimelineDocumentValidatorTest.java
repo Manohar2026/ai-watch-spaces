@@ -58,7 +58,7 @@ class TimelineDocumentValidatorTest {
     void rejectsDuplicateEventKeys() throws IOException {
         ObjectNode document = (ObjectNode) sample();
         ArrayNode events = (ArrayNode) document.path("events");
-        events.get(1).withObject().put("eventKey", events.get(0).path("eventKey").asText());
+        ((ObjectNode) events.get(1)).put("eventKey", events.get(0).path("eventKey").asText());
 
         assertInvalid(document, Map.of(), "DUPLICATE_EVENT_KEY");
     }
@@ -66,7 +66,7 @@ class TimelineDocumentValidatorTest {
     @Test
     void rejectsEventOutsideTitleDuration() throws IOException {
         ObjectNode document = (ObjectNode) sample();
-        document.path("events").get(0).withObject().put("endMs", 5_001);
+        ((ObjectNode) document.path("events").get(0)).put("endMs", 5_001);
 
         assertInvalid(document, Map.of(), "POSITION_OUT_OF_RANGE");
     }
@@ -74,7 +74,7 @@ class TimelineDocumentValidatorTest {
     @Test
     void rejectsUnknownSubtitleCueKey() throws IOException {
         ObjectNode document = (ObjectNode) sample();
-        document.path("events").get(3).path("payload").withObject().put("cueKey", "not-a-real-cue");
+        ((ObjectNode) document.path("events").get(3).path("payload")).put("cueKey", "not-a-real-cue");
 
         assertInvalid(document, Map.of(), "UNKNOWN_CUE_KEY");
     }
@@ -121,7 +121,7 @@ class TimelineDocumentValidatorTest {
                 .satisfies(error -> {
                     ApiException apiError = (ApiException) error;
                     assertThat(apiError.code()).isEqualTo(ErrorCode.TIMELINE_INVALID);
-                    assertThat(apiError.details()).extracting("code").contains(detailCode);
+                    assertThat(apiError.details()).extracting(com.aiwatchspaces.common.error.ErrorDetail::code).contains(detailCode);
                 });
     }
 
