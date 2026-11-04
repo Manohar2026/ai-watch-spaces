@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "titleId": "0c6b2679-9f94-4bbd-ae4d-47e8d7f1c001",
+  "durationMs": 5000,
+  "events": [
+    {
+      "eventKey": "flower-opening-scene",
+      "type": "SCENE",
+      "startMs": 0,
+      "endMs": 5000,
+      "payload": {
+        "title": "The first bloom",
+        "summary": "A time-lapse captures a flower opening in a quiet garden."
+      }
+    },
+    {
+      "eventKey": "time-lapse-trivia",
+      "type": "TRIVIA",
+      "startMs": 1200,
+      "endMs": null,
+      "payload": {
+        "text": "Time-lapse photography compresses gradual changes into a short sequence."
+      }
+    },
+    {
+      "eventKey": "time-lapse-glossary",
+      "type": "GLOSSARY",
+      "startMs": 1500,
+      "endMs": null,
+      "payload": {
+        "term": "Time-lapse",
+        "definition": "A technique that records images at intervals and plays them back as motion."
+      }
+    },
+    {
+      "eventKey": "bloom-caption",
+      "type": "VARIATION_POINT",
+      "startMs": 2000,
+      "endMs": null,
+      "payload": {
+        "variationType": "SUBTITLE_TEXT",
+        "cueKey": "bloom-caption-01"
+      },
+      "options": [
+        {
+          "key": "english-original",
+          "label": "English original",
+          "locale": "en",
+          "textValue": "Every bloom has its own moment.",
+          "approved": true,
+          "default": true,
+          "sortOrder": 0
+        },
+        {
+          "key": "indian-english",
+          "label": "Indian English",
+          "locale": "en-IN",
+          "textValue": "Every flower has its own moment.",
+          "approved": true,
+          "default": false,
+          "sortOrder": 1
+        }
+      ]
+    }
+  ]
+}
