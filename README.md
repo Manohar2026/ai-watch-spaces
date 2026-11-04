@@ -24,7 +24,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Frontend F0:** full-stack architecture documented.
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
 - **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; browser verification against a local backend is pending.
-- **Next:** build the React catalogue UI against the M3 read APIs and verify the registration/login/refresh/logout flow in a local browser/backend setup.
+- **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
 
 Backend verification results are recorded in [docs/m2-verification.md](docs/m2-verification.md). Those are repository-recorded results; run the commands below to verify the current checkout yourself.
 
