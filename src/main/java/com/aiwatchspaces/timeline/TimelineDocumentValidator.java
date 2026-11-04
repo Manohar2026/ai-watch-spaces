@@ -157,7 +157,7 @@ class TimelineDocumentValidator {
             return;
         }
         if (node.isObject()) {
-            node.fields().forEachRemaining(entry ->
+            node.properties().forEach(entry ->
                     validatePlainTextStrings(entry.getValue(), path + "." + entry.getKey(), errors));
         } else if (node.isArray()) {
             for (int index = 0; index < node.size(); index++) {
