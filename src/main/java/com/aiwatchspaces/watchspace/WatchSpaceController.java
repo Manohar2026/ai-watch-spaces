@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -70,6 +71,28 @@ class WatchSpaceController {
     Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> end(
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.end(watchSpaceId, caller);
+    }
+
+    @PostMapping("/{watchSpaceId}/lock")
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> setLocked(
+            @PathVariable UUID watchSpaceId,
+            AuthenticatedUser caller,
+            @Valid @RequestBody WatchSpaceDtos.LockWatchSpaceRequest request) {
+        return watchSpaces.setLocked(watchSpaceId, caller, request.locked());
+    }
+
+    @PatchMapping("/{watchSpaceId}/settings")
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> updateSettings(
+            @PathVariable UUID watchSpaceId,
+            AuthenticatedUser caller,
+            @Valid @RequestBody WatchSpaceDtos.UpdateRoomSettingsRequest request) {
+        return watchSpaces.updateSettings(watchSpaceId, caller, request);
+    }
+
+    @PostMapping("/{watchSpaceId}/invite-code")
+    Mono<WatchSpaceDtos.RotateInviteCodeResponse> rotateInviteCode(
+            @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
+        return watchSpaces.rotateInviteCode(watchSpaceId, caller);
     }
 
     @GetMapping("/{watchSpaceId}")
