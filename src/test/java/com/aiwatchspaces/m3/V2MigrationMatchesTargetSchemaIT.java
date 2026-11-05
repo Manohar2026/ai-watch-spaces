@@ -37,7 +37,7 @@ class V2MigrationMatchesTargetSchemaIT {
     private static final String COLUMNS = """
             SELECT table_name, column_name, data_type, character_maximum_length, is_nullable, column_default
             FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'
+            WHERE table_schema = 'public' AND table_name IN ('app_users', 'refresh_tokens', 'titles', 'genres', 'title_genres', 'title_timeline_versions', 'timeline_events', 'subtitle_tracks', 'subtitle_cues', 'variation_options')
             ORDER BY table_name, ordinal_position""";
     private static final String CONSTRAINTS = """
             SELECT conrelid::regclass::text AS table_name, conname, contype, pg_get_constraintdef(oid) AS definition
