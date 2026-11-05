@@ -2,7 +2,7 @@
 
 Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHEMA.sql` (v0.4) before proposing or changing architecture. `FULL_STACK_ARCHITECTURE.md` is the approved full-stack scope (React + TypeScript frontend with the existing Java/Spring Boot backend). `SYSTEM_DESIGN.md` remains the detailed backend baseline, and `DATABASE_SCHEMA.sql` is the target state, not a migration.
 
-**Current checkpoint:** backend M1 and M2 implemented (2026-10-26); frontend F0–F2 direction and initial implementation are on `feature/full-stack-architecture`. **Backend M3 was explicitly authorized by the user on 2026-11-04. M4 and later require separate explicit authorization.** The M3 implementation must follow the exact approved v0.4 design and report every verification result honestly.
+**Current checkpoint:** backend M1–M3 are implemented on `main`; frontend F0–F3 work is in progress (F3 follow-up PR #5 still needs local browser/API verification). **Backend M4 was explicitly authorized by the user on 2026-11-05. M5 and later require separate explicit authorization.** M4 must follow the exact approved v0.4 design and report every verification result honestly.
 
 ## Guardrails
 
@@ -89,7 +89,7 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
 - Keep the Postman collection, scripted WebSocket scenarios, seed data, migrations and docs synchronized with the implementation.
 - Check SYSTEM_DESIGN §17 (open decisions) before work that depends on them; ask the user rather than deciding silently.
 
-## Backend milestones M1–M7 (M3 currently authorized; M4+ require separate approval)
+## Backend milestones M1–M7 (M4 currently authorized; M5+ require separate approval)
 
 | # | Deliverable |
 |---|---|
