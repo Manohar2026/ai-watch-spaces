@@ -149,12 +149,19 @@ class WatchSpaceJoinIT {
         rateLimiter.reset();
 
         List<JoinAttempt> attempts = Flux.fromIterable(guests)
-                .flatMap(guest -> client.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
-                        .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
-                        .bodyValue(Map.of("inviteCode", inviteCode))
-                        .exchangeToMono(response -> response.bodyToMono(String.class).defaultIfEmpty("")
-                                .map(body -> new JoinAttempt(response.statusCode().value(), body))),
-                        20)
+                .parallel(20)
+                .runOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                .map(guest -> {
+                    var result = client.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
+                            .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
+                            .bodyValue(Map.of("inviteCode", inviteCode))
+                            .exchange()
+                            .expectBody(String.class)
+                            .returnResult();
+                    String body = result.getResponseBody() == null ? "" : result.getResponseBody();
+                    return new JoinAttempt(result.getStatus().value(), body);
+                })
+                .sequential()
                 .collectList()
                 .block(Duration.ofSeconds(45));
 
