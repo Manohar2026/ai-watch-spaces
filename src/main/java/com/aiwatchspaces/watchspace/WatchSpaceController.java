@@ -8,6 +8,7 @@ import com.aiwatchspaces.common.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -93,6 +94,22 @@ class WatchSpaceController {
     Mono<WatchSpaceDtos.RotateInviteCodeResponse> rotateInviteCode(
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.rotateInviteCode(watchSpaceId, caller);
+    }
+
+    @PostMapping("/{watchSpaceId}/participants/{userId}/mute")
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> setParticipantMuted(
+            @PathVariable UUID watchSpaceId,
+            @PathVariable UUID userId,
+            AuthenticatedUser caller,
+            @Valid @RequestBody WatchSpaceDtos.MuteParticipantRequest request) {
+        return watchSpaces.setParticipantMuted(watchSpaceId, userId, caller, request.muted());
+    }
+
+    @DeleteMapping("/{watchSpaceId}/participants/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    Mono<Void> removeParticipant(
+            @PathVariable UUID watchSpaceId, @PathVariable UUID userId, AuthenticatedUser caller) {
+        return watchSpaces.removeParticipant(watchSpaceId, userId, caller);
     }
 
     @GetMapping("/{watchSpaceId}")
