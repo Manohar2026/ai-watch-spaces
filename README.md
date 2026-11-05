@@ -18,7 +18,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 
 ## Current implementation status
 
-- **Backend M4 (in progress):** Flyway V3, the serialized room mutation lane, invite-code hashing, room creation, privacy-aware reads, participant listing, both join routes, quick-rejoin, transaction-guarded capacity, leave, timeline/subtitle pinning on start, and final room end are implemented on `feature/m4-watchspace-lifecycle`. PostgreSQL Testcontainers CI is passing for the committed slices.
+- **Backend M4 (in progress):** Flyway V3, the serialized room mutation lane, invite-code hashing/rotation, room creation, privacy-aware reads, participant listing, both join routes, quick-rejoin, transaction-guarded capacity, leave/start/end, lock/unlock, partial room settings, and persistent mute/removal are implemented on `feature/m4-watchspace-lifecycle`. PostgreSQL Testcontainers CI passes all 89 tests. Host transfer and realtime socket effects remain dependent on M5.
 
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).
