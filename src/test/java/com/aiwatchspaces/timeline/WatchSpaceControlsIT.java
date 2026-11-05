@@ -311,15 +311,14 @@ class WatchSpaceControlsIT {
                 .returnResult().getResponseBody();
     }
 
-    private Map<?, ?> joinByIdExpectCode(
+    private void joinByIdExpectCode(
             AuthTestSupport.Account account, UUID roomId, String inviteCode, String expectedCode) {
-        return client.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
+        client.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
                 .headers(headers -> headers.setBearerAuth(account.tokens().accessToken()))
                 .bodyValue(Map.of("inviteCode", inviteCode))
                 .exchange()
                 .expectStatus().isEqualTo(409)
-                .expectBody().jsonPath("$.code").isEqualTo(expectedCode)
-                .returnResult().getResponseBody() == null ? Map.of() : Map.of();
+                .expectBody().jsonPath("$.code").isEqualTo(expectedCode);
     }
 
     private Map<?, ?> joinByInvite(AuthTestSupport.Account account, String inviteCode) {
