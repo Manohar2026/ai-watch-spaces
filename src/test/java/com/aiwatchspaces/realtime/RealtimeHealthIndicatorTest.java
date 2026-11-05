@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.aiwatchspaces.infrastructure.db.DbExecutorTestAccess;
 import com.aiwatchspaces.infrastructure.db.DbExecutor;
+import com.aiwatchspaces.watchspace.RoomRecoveryStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.context.event.ContextClosedEvent;
@@ -17,7 +18,10 @@ class RealtimeHealthIndicatorTest {
     @Test
     void upWhenIdle() throws Exception {
         try (DbExecutor executor = DbExecutorTestAccess.create(1, 10)) {
-            var indicator = new RealtimeHealthIndicator(executor, new RealtimeHealthProperties(0.9));
+            RoomRecoveryStatus recovery = new RoomRecoveryStatus();
+            recovery.markCompleted();
+            var indicator = new RealtimeHealthIndicator(
+                    executor, new RealtimeHealthProperties(0.9), recovery);
             assertThat(indicator.health().block().getStatus()).isEqualTo(Status.UP);
         }
     }
@@ -25,11 +29,32 @@ class RealtimeHealthIndicatorTest {
     @Test
     void outOfServiceWhenShuttingDown() throws Exception {
         try (DbExecutor executor = DbExecutorTestAccess.create(1, 10)) {
-            var indicator = new RealtimeHealthIndicator(executor, new RealtimeHealthProperties(0.9));
+            RoomRecoveryStatus recovery = new RoomRecoveryStatus();
+            recovery.markCompleted();
+            var indicator = new RealtimeHealthIndicator(
+                    executor, new RealtimeHealthProperties(0.9), recovery);
             indicator.onApplicationEvent(new ContextClosedEvent(new GenericApplicationContext()));
             var health = indicator.health().block();
             assertThat(health.getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
             assertThat(health.getDetails()).containsEntry("shuttingDown", true);
+        }
+    }
+
+    @Test
+    void outOfServiceUntilStartupRecoveryCompletes() throws Exception {
+        try (DbExecutor executor = DbExecutorTestAccess.create(1, 10)) {
+            RoomRecoveryStatus recovery = new RoomRecoveryStatus();
+            var indicator = new RealtimeHealthIndicator(
+                    executor, new RealtimeHealthProperties(0.9), recovery);
+
+            assertThat(indicator.health().block().getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
+            assertThat(indicator.health().block().getDetails())
+                    .containsEntry("startupRecoveryComplete", false);
+
+            recovery.markCompleted();
+            assertThat(indicator.health().block().getStatus()).isEqualTo(Status.UP);
+            assertThat(indicator.health().block().getDetails())
+                    .containsEntry("startupRecoveryComplete", true);
         }
     }
 
@@ -46,7 +71,10 @@ class RealtimeHealthIndicatorTest {
             executor.call(() -> 1).subscribe();
             executor.call(() -> 2).subscribe();
 
-            var indicator = new RealtimeHealthIndicator(executor, new RealtimeHealthProperties(0.9));
+            RoomRecoveryStatus recovery = new RoomRecoveryStatus();
+            recovery.markCompleted();
+            var indicator = new RealtimeHealthIndicator(
+                    executor, new RealtimeHealthProperties(0.9), recovery);
             var health = indicator.health().block();
             assertThat(health.getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
             assertThat(health.getDetails()).containsEntry("dbExecutorSaturated", true);
