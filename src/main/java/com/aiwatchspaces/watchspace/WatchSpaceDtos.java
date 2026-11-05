@@ -35,6 +35,9 @@ public final class WatchSpaceDtos {
     public record LockWatchSpaceRequest(@NotNull Boolean locked) {
     }
 
+    public record MuteParticipantRequest(@NotNull Boolean muted) {
+    }
+
     public record UpdateRoomSettingsRequest(
             Boolean triviaEnabled,
             Boolean votingEnabled,
