@@ -5,11 +5,12 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
-/** Join route rate limits (SYSTEM_DESIGN §8.7). */
+/** Watch-space REST rate limits (SYSTEM_DESIGN §8.7). */
 @ConfigurationProperties("aiws.rate-limits.watchspace")
 public record WatchSpaceRateLimitProperties(
         @DefaultValue({"10", "1m"}) Limit joinPerUser,
-        @DefaultValue({"30", "1m"}) Limit joinPerIp) {
+        @DefaultValue({"30", "1m"}) Limit joinPerIp,
+        @DefaultValue({"5", "1h"}) Limit inviteCodeRotationPerRoom) {
 
     public record Limit(int limit, Duration window) {
         public Limit {
