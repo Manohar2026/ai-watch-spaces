@@ -225,6 +225,6 @@ class WatchSpaceModerationIT {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$[?(@.userId == '" + targetUserId + "')].muted")
-                .isEqualTo(expectedMuted);
+                .isEqualTo(java.util.List.of(expectedMuted));
     }
 }
