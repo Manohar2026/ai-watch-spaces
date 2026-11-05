@@ -62,6 +62,9 @@ aiws:
     # HMAC secret for room invite codes; at least 32 UTF-8 bytes.
     invite-code-pepper: ${INVITE_CODE_PEPPER:}
     lane-queue-capacity: 256
+    # SCHEDULED rooms expire this long after scheduled_at, or created_at when unscheduled.
+    unstarted-expiry: 24h
+    expiry-scan-delay-ms: 60000
   realtime:
     health:
       saturation-ratio: 0.9
