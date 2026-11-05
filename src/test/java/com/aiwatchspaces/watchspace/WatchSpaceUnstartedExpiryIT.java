@@ -22,7 +22,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @IntegrationTest
 @TestPropertySource(properties = {
         "aiws.assets.directory=target/test-assets",
-        "aiws.watchspace.unstarted-expiry=24h"
+        "aiws.watchspace.unstarted-expiry=24h",
+        "aiws.watchspace.expiry-scan-delay-ms=3600000"
 })
 class WatchSpaceUnstartedExpiryIT {
 
