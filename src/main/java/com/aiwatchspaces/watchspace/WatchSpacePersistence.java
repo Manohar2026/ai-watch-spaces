@@ -487,7 +487,7 @@ class WatchSpacePersistence {
 
     private PersistedLifecycleRoom lockLifecycleRoom(UUID watchSpaceId) {
         List<PersistedLifecycleRoom> rooms = jdbc.query("""
-                SELECT id, title_id, host_user_id, status, session_correlation_id,
+                SELECT id, title_id, host_user_id, privacy, status, session_correlation_id,
                        state_version, last_sequence_no
                 FROM watch_spaces
                 WHERE id = :watchSpaceId
@@ -497,6 +497,7 @@ class WatchSpacePersistence {
                         rs.getObject("id", UUID.class),
                         rs.getObject("title_id", UUID.class),
                         rs.getObject("host_user_id", UUID.class),
+                        RoomState.Privacy.valueOf(rs.getString("privacy")),
                         RoomState.Status.valueOf(rs.getString("status")),
                         rs.getObject("session_correlation_id", UUID.class),
                         rs.getLong("state_version"),
@@ -666,8 +667,9 @@ class WatchSpacePersistence {
         }
     }
 
-    private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId, RoomState.Status status,
-                                          UUID sessionCorrelationId, long stateVersion, long lastSequenceNo) {
+    private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId, RoomState.Privacy privacy,
+                                          RoomState.Status status, UUID sessionCorrelationId,
+                                          long stateVersion, long lastSequenceNo) {
     }
 
     private record SubtitleTrackInfo(UUID id, String locale) {
