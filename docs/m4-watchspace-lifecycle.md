@@ -28,6 +28,9 @@ The migration does not add any new table or column beyond the approved V3 target
 - `POST /api/v1/watch-spaces/{id}/lock` is host-only. It changes the lock flag and appends `ROOM_LOCK_CHANGED`; repeating the current lock value is an idempotent no-op. A lock blocks first-time joiners but does not block a previous non-removed member from quick-rejoining.
 - `PATCH /api/v1/watch-spaces/{id}/settings` is a host-only partial update for `triviaEnabled`, `votingEnabled`, `aiVerbosity`, `chatMuted` and `maxParticipants`. The capacity remains in the 2–50 range and cannot be reduced below the active membership count. Only changed fields are written to `ROOM_SETTINGS_UPDATED`; an empty patch is rejected.
 - `POST /api/v1/watch-spaces/{id}/invite-code` is host-only and returns a replacement `XXXXX-XXXXX` plaintext code once. The previous hash is replaced in the same transaction, the `INVITE_CODE_ROTATED` event contains no invite code, and rotations are limited to 5/hour/room.
+- `POST /api/v1/watch-spaces/{id}/participants/{userId}/mute` is host-only. It upserts persistent mute state, preserves removal state, appends `PARTICIPANT_MUTE_CHANGED` only when the value changes, and leaves membership intact. Mute state is loaded into participant projections and survives leave/rejoin.
+- `DELETE /api/v1/watch-spaces/{id}/participants/{userId}` is host-only. It sets `removed_at/removed_by`, closes any active membership interval with `REMOVED`, and appends `PARTICIPANT_REMOVED`. Repeating removal is an idempotent no-op. The host cannot mute or remove themself.
+- The M4 broadcaster remains a no-op adapter. Closing a removed user's WebSocket with code 4411 and enforcing `CHAT_MUTED` on chat commands require the M5 realtime/chat adapters.
 - The request is submitted to a lazily created, per-room FIFO lane with a bounded queue (default 256). The lane reads the injected clock once, truncates to PostgreSQL microsecond precision, and clamps against the previous room event instant.
 - The single creation transaction locks the host account row (so concurrent room creation cannot bypass the five-active-room limit), verifies the published title, inserts the room and host membership, appends `ROOM_CREATED` at sequence 1 and `PARTICIPANT_JOINED` at sequence 2, then advances `last_sequence_no` with an expected-value guard.
 - Invite codes use ten Crockford Base32 characters displayed as `XXXXX-XXXXX`. Only the HMAC-SHA256 digest is stored; the plaintext code is returned in the successful creation response only. The pepper comes from `INVITE_CODE_PEPPER` and must be at least 32 UTF-8 bytes.
@@ -42,14 +45,15 @@ The migration does not add any new table or column beyond the approved V3 target
 - `WatchSpaceJoinIT` verifies both join routes, idempotence, public-link joins, quick-rejoin while locked, locked-room and removed-user rejection, plus 20 concurrent joins into a five-member room (host included) without exceeding capacity.
 - `WatchSpaceLifecycleIT` verifies leave idempotence, the no-current-timeline rejection, timeline/subtitle pinning on start, paused-at-zero initialization, start idempotence, end membership closure and the final `ROOM_ENDED` ledger event.
 - `WatchSpaceControlsIT` verifies lock/quick-rejoin semantics, settings partial updates and capacity validation, host-only controls, invite rotation invalidating the old code, the 5/hour limit and that invite plaintext never reaches the event ledger.
+- `WatchSpaceModerationIT` verifies mute persistence across leave/rejoin, unmute, terminal removal and rejoin rejection, idempotent repeat removal, self-moderation prevention and host-only authorization.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
 
 A passing schema-parity test verifies the migration shape only. It does not verify room creation, the per-room mutation lane, membership rules, capacity races, invite-code security or lifecycle APIs. Those remain in M4.
 
 ## Remaining M4 implementation
 
-1. Moderation (mute/remove) and host transfer, including persistent authorization and ledger coverage.
+1. Host transfer requires an active, currently connected target; finish it with the M5 connected-session registry. Removed-user socket closure (4411) and chat enforcement of `CHAT_MUTED` also wait for M5 adapters.
 2. Lifecycle timers: idle end and unstarted expiry; host socket disconnect/reconnect waits for M5 realtime sessions.
 3. Complete stale-lane rehydration handling and post-commit broadcast integration.
-4. Additional integration coverage for monotonic timestamps, guard conflicts and settings side effects such as cancellation of open votes when voting is disabled.
+4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist; add monotonic timestamp and optimistic-guard conflict tests.
 5. REST reference and manual verification evidence.
