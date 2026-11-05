@@ -36,6 +36,9 @@ The migration does not add any new table or column beyond the approved V3 target
 - Invite codes use ten Crockford Base32 characters displayed as `XXXXX-XXXXX`. Only the HMAC-SHA256 digest is stored; the plaintext code is returned in the successful creation response only. The pepper comes from `INVITE_CODE_PEPPER` and must be at least 32 UTF-8 bytes.
 - The join transaction locks the room row, rechecks status/removal/privacy/lock/capacity, inserts membership and `PARTICIPANT_JOINED`, then increments `state_version` and `last_sequence_no` with expected-value guards. Same-room joins are serialized through the lane; concurrent capacity tests verify that the host seat is counted and no over-capacity membership is committed.
 - The lane publishes immutable state only after the persistence transaction returns successfully. A broadcaster port is present; its M4 adapter is intentionally a no-op until the WebSocket transport is implemented in M5.
+- On an optimistic `CONFLICT_RETRY`, the lane invalidates its cached snapshot after the failed transaction; the rejected request receives the conflict response, and the next command rehydrates the room from PostgreSQL.
+- Startup recovery runs before readiness can report `UP`. Persisted `LIVE` and `HOST_DISCONNECTED` rooms are reconciled through their normal lanes: playback is paused at the stored position, status becomes `HOST_DISCONNECTED`, and `RUNTIME_RECOVERED` is appended (with `PLAYBACK_PAUSE` only when recovery found `PLAYING`). The realtime health indicator remains `OUT_OF_SERVICE` until this pass completes.
+- A scheduled expiry sweep checks `SCHEDULED` rooms using `scheduled_at`, or `created_at` when no schedule exists, then rechecks the deadline under the room lane before closing memberships and appending the final `ROOM_ENDED` event with reason `UNSTARTED_EXPIRED`.
 
 ## Verification
 
@@ -43,9 +46,11 @@ The migration does not add any new table or column beyond the approved V3 target
 - `V2MigrationMatchesTargetSchemaIT` remains scoped to the V1/V2 tables so it continues to verify the earlier milestone independently after V3 is present.
 - `WatchSpaceCreateIT` verifies room creation, hashed one-time invites, member details, participant output, privacy preview/404 and the host's five-active-room limit.
 - `WatchSpaceJoinIT` verifies both join routes, idempotence, public-link joins, quick-rejoin while locked, locked-room and removed-user rejection, plus 20 concurrent joins into a five-member room (host included) without exceeding capacity.
-- `WatchSpaceLifecycleIT` verifies leave idempotence, the no-current-timeline rejection, timeline/subtitle pinning on start, paused-at-zero initialization, start idempotence, end membership closure and the final `ROOM_ENDED` ledger event.
+- `WatchSpaceLifecycleIT` verifies leave idempotence, the no-current-timeline rejection, timeline/subtitle pinning on start, paused-at-zero initialization, rejection of repeated start, end membership closure and the final `ROOM_ENDED` ledger event.
 - `WatchSpaceControlsIT` verifies lock/quick-rejoin semantics, settings partial updates and capacity validation, host-only controls, invite rotation invalidating the old code, the 5/hour limit and that invite plaintext never reaches the event ledger.
 - `WatchSpaceModerationIT` verifies mute persistence across leave/rejoin, unmute, terminal removal and rejoin rejection, idempotent repeat removal, self-moderation prevention and host-only authorization.
+- `WatchSpaceUnstartedExpiryIT` verifies the 24-hour unscheduled expiry, `scheduled_at` precedence, membership closure, terminal event reason and repeat-sweep idempotence.
+- `WatchSpaceStartupRecoveryIT` verifies recovery of playing and already-paused rooms, preservation of the persisted playback position/session ID, timestamp reuse, event ordering and state/sequence increments.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
 
 A passing schema-parity test verifies the migration shape only. It does not verify room creation, the per-room mutation lane, membership rules, capacity races, invite-code security or lifecycle APIs. Those remain in M4.
@@ -53,7 +58,7 @@ A passing schema-parity test verifies the migration shape only. It does not veri
 ## Remaining M4 implementation
 
 1. Host transfer requires an active, currently connected target; finish it with the M5 connected-session registry. Removed-user socket closure (4411) and chat enforcement of `CHAT_MUTED` also wait for M5 adapters.
-2. Lifecycle timers: idle end and unstarted expiry; host socket disconnect/reconnect waits for M5 realtime sessions.
-3. Complete stale-lane rehydration handling and post-commit broadcast integration.
+2. Idle auto-end and host/participant grace timers require the M5 connected-session registry; scheduled/unstarted expiry is implemented in M4.
+3. Post-commit broadcast delivery requires the M5 WebSocket broadcaster. M4 stale-lane invalidation is implemented; a conflict is returned to the caller and the next command reloads the persisted snapshot.
 4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist; add monotonic timestamp and optimistic-guard conflict tests.
 5. REST reference and manual verification evidence.

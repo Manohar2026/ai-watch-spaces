@@ -149,6 +149,14 @@ final class RoomLane {
                 })
                 .then()
                 .onErrorResume(error -> {
+                    if (error instanceof ApiException apiException
+                            && apiException.code() == ErrorCode.CONFLICT_RETRY) {
+                        // The DB transaction rolled back, but another writer may have advanced
+                        // the durable snapshot. Force the next command to hydrate it again.
+                        state.set(null);
+                        log.warn("Room lane invalidated after optimistic conflict: watchSpaceId={}",
+                                watchSpaceId);
+                    }
                     task.resultSink().error(error);
                     return Mono.empty();
                 })
