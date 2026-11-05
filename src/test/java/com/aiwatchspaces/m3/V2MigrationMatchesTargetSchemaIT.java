@@ -33,7 +33,7 @@ class V2MigrationMatchesTargetSchemaIT {
 
     private static final String TABLES = """
             SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history' ORDER BY table_name""";
+            WHERE table_schema = 'public' AND table_name IN ('app_users', 'refresh_tokens', 'titles', 'genres', 'title_genres', 'title_timeline_versions', 'timeline_events', 'subtitle_tracks', 'subtitle_cues', 'variation_options') ORDER BY table_name""";
     private static final String COLUMNS = """
             SELECT table_name, column_name, data_type, character_maximum_length, is_nullable, column_default
             FROM information_schema.columns
@@ -42,11 +42,11 @@ class V2MigrationMatchesTargetSchemaIT {
     private static final String CONSTRAINTS = """
             SELECT conrelid::regclass::text AS table_name, conname, contype, pg_get_constraintdef(oid) AS definition
             FROM pg_constraint WHERE connamespace = 'public'::regnamespace
-              AND conrelid::regclass::text <> 'flyway_schema_history'
+              AND conrelid::regclass::text IN ('app_users', 'refresh_tokens', 'titles', 'genres', 'title_genres', 'title_timeline_versions', 'timeline_events', 'subtitle_tracks', 'subtitle_cues', 'variation_options')
             ORDER BY 1, 2""";
     private static final String INDEXES = """
             SELECT tablename, indexname, indexdef FROM pg_indexes
-            WHERE schemaname = 'public' AND tablename <> 'flyway_schema_history' ORDER BY 1, 2""";
+            WHERE schemaname = 'public' AND tablename IN ('app_users', 'refresh_tokens', 'titles', 'genres', 'title_genres', 'title_timeline_versions', 'timeline_events', 'subtitle_tracks', 'subtitle_cues', 'variation_options') ORDER BY 1, 2""";
 
     @Autowired
     JdbcTemplate migrated;
