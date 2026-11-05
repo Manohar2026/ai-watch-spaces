@@ -497,6 +497,77 @@ class WatchSpacePersistence {
 
 
 
+
+    /** Candidate scan for the scheduled-room expiry job. The lane rechecks the deadline under row lock. */
+    @Transactional(readOnly = true)
+    List<UUID> findScheduledRoomsPastUnstartedExpiry(Instant scanInstant, java.time.Duration unstartedExpiry,
+                                                     int batchSize) {
+        Instant cutoff = scanInstant.minus(unstartedExpiry);
+        return jdbc.query("""
+                SELECT id
+                FROM watch_spaces
+                WHERE status = 'SCHEDULED'
+                  AND COALESCE(scheduled_at, created_at) <= :cutoff
+                ORDER BY COALESCE(scheduled_at, created_at), id
+                LIMIT :batchSize
+                """, new MapSqlParameterSource()
+                .addValue("cutoff", utc(cutoff), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("batchSize", batchSize),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+    }
+
+    /** Ends an unstarted room only after its contractual 24-hour (configurable) deadline. */
+    @Transactional
+    LifecycleResult expireUnstartedRoom(UUID watchSpaceId, Instant mutationInstant,
+                                        java.time.Duration unstartedExpiry) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        if (room.status() != RoomState.Status.SCHEDULED) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+        Instant expiryBase = room.scheduledAt() == null ? room.createdAt() : room.scheduledAt();
+        if (expiryBase == null || mutationInstant.isBefore(expiryBase.plus(unstartedExpiry))) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+
+        jdbc.update("""
+                UPDATE watch_space_participants
+                SET left_at = :endedAt, leave_reason = 'ROOM_ENDED'
+                WHERE watch_space_id = :watchSpaceId AND left_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("endedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("watchSpaceId", watchSpaceId));
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent ended = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, null,
+                "ROOM_ENDED", null, Map.of("reason", "UNSTARTED_EXPIRED"),
+                null, null, mutationInstant);
+        insertEvent(ended);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET status = 'ENDED',
+                    ended_reason = 'UNSTARTED_EXPIRED',
+                    ended_at = :endedAt,
+                    playback_state = 'PAUSED',
+                    playback_updated_at = :playbackUpdatedAt,
+                    state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND status = 'SCHEDULED'
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, new MapSqlParameterSource()
+                .addValue("endedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("playbackUpdatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("nextSequenceNo", nextSequenceNo)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion()));
+        requireOneRow(updated, "The room changed while expiry was being committed. Retry the sweep.");
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(ended));
+    }
+
     /** Persists participant mute state across membership intervals and appends one ledger event. */
     @Transactional
     LifecycleResult setMuted(UUID watchSpaceId, UUID actorUserId, UUID targetUserId,
@@ -803,6 +874,7 @@ class WatchSpacePersistence {
     private PersistedLifecycleRoom lockLifecycleRoom(UUID watchSpaceId) {
         List<PersistedLifecycleRoom> rooms = jdbc.query("""
                 SELECT id, title_id, host_user_id, privacy, status, session_correlation_id,
+                       scheduled_at, created_at,
                        is_locked, max_participants, ai_verbosity, trivia_enabled, voting_enabled, chat_muted,
                        invite_code_hash, state_version, last_sequence_no
                 FROM watch_spaces
@@ -816,6 +888,8 @@ class WatchSpacePersistence {
                         RoomState.Privacy.valueOf(rs.getString("privacy")),
                         RoomState.Status.valueOf(rs.getString("status")),
                         rs.getObject("session_correlation_id", UUID.class),
+                        instant(rs, "scheduled_at"),
+                        instant(rs, "created_at"),
                         rs.getBoolean("is_locked"),
                         rs.getInt("max_participants"),
                         RoomState.AiVerbosity.valueOf(rs.getString("ai_verbosity")),
@@ -1010,7 +1084,8 @@ class WatchSpacePersistence {
 
     private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId,
                                           RoomState.Privacy privacy, RoomState.Status status,
-                                          UUID sessionCorrelationId, boolean locked, int maxParticipants,
+                                          UUID sessionCorrelationId, Instant scheduledAt, Instant createdAt,
+                                          boolean locked, int maxParticipants,
                                           RoomState.AiVerbosity aiVerbosity, boolean triviaEnabled,
                                           boolean votingEnabled, boolean chatMuted, String inviteCodeHash,
                                           long stateVersion, long lastSequenceNo) {
