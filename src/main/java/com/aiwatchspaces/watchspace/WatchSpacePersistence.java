@@ -496,6 +496,159 @@ class WatchSpacePersistence {
     }
 
 
+
+    /** Persists participant mute state across membership intervals and appends one ledger event. */
+    @Transactional
+    LifecycleResult setMuted(UUID watchSpaceId, UUID actorUserId, UUID targetUserId,
+                             boolean muted, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHostMutation(room, actorUserId);
+        requireModerationTarget(room, actorUserId, targetUserId, "mute");
+
+        List<UUID> memberships = jdbc.query("""
+                SELECT id
+                FROM watch_space_participants
+                WHERE watch_space_id = :watchSpaceId AND user_id = :targetUserId
+                ORDER BY joined_at DESC, id DESC
+                LIMIT 1
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId, "targetUserId", targetUserId),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        if (memberships.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "The target user is not a member of this room.");
+        }
+
+        List<ModerationInfo> currentModeration = jdbc.query("""
+                SELECT is_muted, removed_at
+                FROM watch_space_moderation
+                WHERE watch_space_id = :watchSpaceId AND user_id = :targetUserId
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId, "targetUserId", targetUserId),
+                (rs, rowNum) -> new ModerationInfo(rs.getBoolean("is_muted"), instant(rs, "removed_at")));
+        if (!currentModeration.isEmpty() && currentModeration.getFirst().removedAt() != null) {
+            throw new ApiException(ErrorCode.REMOVED_FROM_ROOM, "The target user has been removed from this room.");
+        }
+        boolean currentlyMuted = !currentModeration.isEmpty() && currentModeration.getFirst().muted();
+        if (currentlyMuted == muted) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+
+        if (muted) {
+            jdbc.update("""
+                    INSERT INTO watch_space_moderation
+                        (watch_space_id, user_id, is_muted, muted_at, muted_by, updated_at)
+                    VALUES (:watchSpaceId, :targetUserId, TRUE, :mutedAt, :mutedBy, :updatedAt)
+                    ON CONFLICT (watch_space_id, user_id) DO UPDATE
+                    SET is_muted = TRUE,
+                        muted_at = EXCLUDED.muted_at,
+                        muted_by = EXCLUDED.muted_by,
+                        updated_at = EXCLUDED.updated_at
+                    """, new MapSqlParameterSource()
+                    .addValue("watchSpaceId", watchSpaceId)
+                    .addValue("targetUserId", targetUserId)
+                    .addValue("mutedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                    .addValue("mutedBy", actorUserId)
+                    .addValue("updatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE));
+        } else {
+            jdbc.update("""
+                    UPDATE watch_space_moderation
+                    SET is_muted = FALSE, muted_at = NULL, muted_by = NULL, updated_at = :updatedAt
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :targetUserId
+                    """, new MapSqlParameterSource()
+                    .addValue("updatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                    .addValue("watchSpaceId", watchSpaceId)
+                    .addValue("targetUserId", targetUserId));
+        }
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent event = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "PARTICIPANT_MUTE_CHANGED", null,
+                Map.of("userId", targetUserId.toString(), "muted", muted),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(event);
+        advanceRoomVersion(room, watchSpaceId, nextSequenceNo);
+        return new LifecycleResult(loadStateInternal(watchSpaceId), memberships.getFirst(),
+                mutationInstant, List.of(event));
+    }
+
+    /** Marks a participant removed, closes any active membership and prevents every future rejoin. */
+    @Transactional
+    LifecycleResult removeParticipant(UUID watchSpaceId, UUID actorUserId, UUID targetUserId,
+                                      Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHostMutation(room, actorUserId);
+        requireModerationTarget(room, actorUserId, targetUserId, "remove");
+
+        List<UUID> memberships = jdbc.query("""
+                SELECT id
+                FROM watch_space_participants
+                WHERE watch_space_id = :watchSpaceId AND user_id = :targetUserId
+                ORDER BY joined_at DESC, id DESC
+                LIMIT 1
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId, "targetUserId", targetUserId),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        if (memberships.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "The target user is not a member of this room.");
+        }
+
+        List<Instant> priorRemoval = jdbc.query("""
+                SELECT removed_at
+                FROM watch_space_moderation
+                WHERE watch_space_id = :watchSpaceId AND user_id = :targetUserId
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId, "targetUserId", targetUserId),
+                (rs, rowNum) -> instant(rs, "removed_at"));
+        if (!priorRemoval.isEmpty() && priorRemoval.getFirst() != null) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), memberships.getFirst(),
+                    mutationInstant, List.of());
+        }
+
+        jdbc.update("""
+                INSERT INTO watch_space_moderation
+                    (watch_space_id, user_id, removed_at, removed_by, updated_at)
+                VALUES (:watchSpaceId, :targetUserId, :removedAt, :removedBy, :updatedAt)
+                ON CONFLICT (watch_space_id, user_id) DO UPDATE
+                SET removed_at = EXCLUDED.removed_at,
+                    removed_by = EXCLUDED.removed_by,
+                    updated_at = EXCLUDED.updated_at
+                """, new MapSqlParameterSource()
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("targetUserId", targetUserId)
+                .addValue("removedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("removedBy", actorUserId)
+                .addValue("updatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE));
+
+        jdbc.update("""
+                UPDATE watch_space_participants
+                SET left_at = :removedAt, leave_reason = 'REMOVED'
+                WHERE watch_space_id = :watchSpaceId
+                  AND user_id = :targetUserId
+                  AND left_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("removedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("targetUserId", targetUserId));
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent event = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "PARTICIPANT_REMOVED", null,
+                Map.of("userId", targetUserId.toString(), "membershipId", memberships.getFirst().toString(),
+                        "reason", "REMOVED"),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(event);
+        advanceRoomVersion(room, watchSpaceId, nextSequenceNo);
+        return new LifecycleResult(loadStateInternal(watchSpaceId), memberships.getFirst(),
+                mutationInstant, List.of(event));
+    }
+
+    private static void requireModerationTarget(
+            PersistedLifecycleRoom room, UUID actorUserId, UUID targetUserId, String operation) {
+        if (actorUserId.equals(targetUserId) || room.hostUserId().equals(targetUserId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "The room host cannot " + operation + " themself.");
+        }
+    }
+
     /** Host-only lock/unlock mutation. Repeating the current value is a no-op. */
     @Transactional
     LifecycleResult setLocked(UUID watchSpaceId, UUID actorUserId, boolean locked, Instant mutationInstant) {
@@ -867,6 +1020,9 @@ class WatchSpacePersistence {
         RotationResult {
             events = List.copyOf(events);
         }
+    }
+
+    private record ModerationInfo(boolean muted, Instant removedAt) {
     }
 
     private record SubtitleTrackInfo(UUID id, String locale) {
