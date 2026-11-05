@@ -52,6 +52,7 @@ The migration does not add any new table or column beyond the approved V3 target
 - `WatchSpaceUnstartedExpiryIT` verifies the 24-hour unscheduled expiry, `scheduled_at` precedence, membership closure, terminal event reason and repeat-sweep idempotence.
 - `WatchSpaceStartupRecoveryIT` verifies recovery of playing and already-paused rooms, preservation of the persisted playback position/session ID, timestamp reuse, event ordering and state/sequence increments.
 - `RoomLaneTest` verifies cached-state invalidation and DB rehydration after `CONFLICT_RETRY`, plus one `Clock` read per mutation, microsecond truncation and backwards-clock clamping.
+- `docs/m4-watchspace-api.md` documents the implemented M4 Watch Space REST routes, request/response shapes, authorization behavior, current presence limitation and error envelope.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
 
 A passing schema-parity test verifies the migration shape only. It does not verify room creation, the per-room mutation lane, membership rules, capacity races, invite-code security or lifecycle APIs. Those remain in M4.
