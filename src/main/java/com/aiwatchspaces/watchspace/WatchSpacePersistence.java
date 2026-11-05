@@ -720,6 +720,70 @@ class WatchSpacePersistence {
         }
     }
 
+
+    /** Finds rooms that must be reconciled before the application becomes ready after a restart. */
+    @Transactional(readOnly = true)
+    List<UUID> findRoomsForStartupRecovery() {
+        return jdbc.query("""
+                SELECT id
+                FROM watch_spaces
+                WHERE status IN ('LIVE', 'HOST_DISCONNECTED')
+                ORDER BY created_at, id
+                """, Map.of(), (rs, rowNum) -> rs.getObject("id", UUID.class));
+    }
+
+    /** Reconciles one persisted live room after restart; its saved playback position is authoritative. */
+    @Transactional
+    LifecycleResult recoverAfterRuntimeRestart(UUID watchSpaceId, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        if (room.status() != RoomState.Status.LIVE
+                && room.status() != RoomState.Status.HOST_DISCONNECTED) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+
+        java.util.ArrayList<RoomEvent> events = new java.util.ArrayList<>();
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        if (room.playbackState() == RoomState.PlaybackState.PLAYING) {
+            RoomEvent paused = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo++, null,
+                    "PLAYBACK_PAUSE", room.lastPlaybackPositionMs(),
+                    Map.of("reason", "RUNTIME_RECOVERED"),
+                    null, room.sessionCorrelationId(), mutationInstant);
+            insertEvent(paused);
+            events.add(paused);
+        }
+
+        RoomEvent recovered = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, null,
+                "RUNTIME_RECOVERED", room.lastPlaybackPositionMs(),
+                Map.of("recoveredFromStatus", room.status().name(),
+                        "playbackPositionMs", room.lastPlaybackPositionMs()),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(recovered);
+        events.add(recovered);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET status = 'HOST_DISCONNECTED',
+                    host_disconnected_at = :recoveredAt,
+                    playback_state = 'PAUSED',
+                    playback_updated_at = :playbackUpdatedAt,
+                    state_version = state_version + 1,
+                    last_sequence_no = :lastSequenceNo
+                WHERE id = :watchSpaceId
+                  AND status IN ('LIVE', 'HOST_DISCONNECTED')
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, new MapSqlParameterSource()
+                .addValue("recoveredAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("playbackUpdatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("lastSequenceNo", nextSequenceNo)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion()));
+        requireOneRow(updated, "The room changed while runtime recovery was being committed. Retry recovery.");
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, events);
+    }
+
     /** Host-only lock/unlock mutation. Repeating the current value is a no-op. */
     @Transactional
     LifecycleResult setLocked(UUID watchSpaceId, UUID actorUserId, boolean locked, Instant mutationInstant) {
@@ -874,7 +938,7 @@ class WatchSpacePersistence {
     private PersistedLifecycleRoom lockLifecycleRoom(UUID watchSpaceId) {
         List<PersistedLifecycleRoom> rooms = jdbc.query("""
                 SELECT id, title_id, host_user_id, privacy, status, session_correlation_id,
-                       scheduled_at, created_at,
+                       scheduled_at, created_at, playback_state, last_playback_position_ms,
                        is_locked, max_participants, ai_verbosity, trivia_enabled, voting_enabled, chat_muted,
                        invite_code_hash, state_version, last_sequence_no
                 FROM watch_spaces
@@ -890,6 +954,8 @@ class WatchSpacePersistence {
                         rs.getObject("session_correlation_id", UUID.class),
                         instant(rs, "scheduled_at"),
                         instant(rs, "created_at"),
+                        RoomState.PlaybackState.valueOf(rs.getString("playback_state")),
+                        rs.getInt("last_playback_position_ms"),
                         rs.getBoolean("is_locked"),
                         rs.getInt("max_participants"),
                         RoomState.AiVerbosity.valueOf(rs.getString("ai_verbosity")),
@@ -1085,6 +1151,7 @@ class WatchSpacePersistence {
     private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId,
                                           RoomState.Privacy privacy, RoomState.Status status,
                                           UUID sessionCorrelationId, Instant scheduledAt, Instant createdAt,
+                                          RoomState.PlaybackState playbackState, int lastPlaybackPositionMs,
                                           boolean locked, int maxParticipants,
                                           RoomState.AiVerbosity aiVerbosity, boolean triviaEnabled,
                                           boolean votingEnabled, boolean chatMuted, String inviteCodeHash,
