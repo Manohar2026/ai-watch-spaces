@@ -3,8 +3,8 @@ package com.aiwatchspaces.watchspace;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Host end command; ROOM_ENDED is committed last and closes all active membership intervals. */
-final class EndWatchSpaceMutation implements RoomMutation<WatchSpaceDtos.RoomLifecycleResponse> {
+/** Host end command: close memberships and append ROOM_ENDED as the room's final ledger event. */
+final class EndWatchSpaceMutation implements RoomMutation<RoomState> {
 
     private final UUID watchSpaceId;
     private final UUID hostUserId;
@@ -17,14 +17,9 @@ final class EndWatchSpaceMutation implements RoomMutation<WatchSpaceDtos.RoomLif
     }
 
     @Override
-    public RoomMutationCommit<WatchSpaceDtos.RoomLifecycleResponse> apply(
-            RoomState current, Instant mutationInstant) {
+    public RoomMutationCommit<RoomState> apply(RoomState current, Instant mutationInstant) {
         WatchSpacePersistence.LifecycleResult result =
                 persistence.end(watchSpaceId, hostUserId, mutationInstant);
-        RoomState state = result.state();
-        WatchSpaceDtos.RoomLifecycleResponse response = new WatchSpaceDtos.RoomLifecycleResponse(
-                watchSpaceId, state.status(), result.changedAt(), state.sessionCorrelationId(),
-                state.pinnedTimelineVersionId(), state.stateVersion(), state.lastSequenceNo());
-        return new RoomMutationCommit<>(state, response, result.events());
+        return new RoomMutationCommit<>(result.state(), result.state(), result.events());
     }
 }

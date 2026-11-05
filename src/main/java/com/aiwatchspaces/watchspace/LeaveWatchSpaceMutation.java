@@ -3,8 +3,8 @@ package com.aiwatchspaces.watchspace;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Explicit leave command; the durable membership close and ledger append share one transaction. */
-final class LeaveWatchSpaceMutation implements RoomMutation<WatchSpaceDtos.LeaveWatchSpaceResponse> {
+/** Explicit leave command; a prior completed leave is idempotent and does not append another event. */
+final class LeaveWatchSpaceMutation implements RoomMutation<Boolean> {
 
     private final UUID watchSpaceId;
     private final UUID userId;
@@ -17,14 +17,8 @@ final class LeaveWatchSpaceMutation implements RoomMutation<WatchSpaceDtos.Leave
     }
 
     @Override
-    public RoomMutationCommit<WatchSpaceDtos.LeaveWatchSpaceResponse> apply(
-            RoomState current, Instant mutationInstant) {
-        WatchSpacePersistence.LifecycleResult result =
-                persistence.leave(watchSpaceId, userId, mutationInstant);
-        RoomState state = result.state();
-        WatchSpaceDtos.LeaveWatchSpaceResponse response =
-                new WatchSpaceDtos.LeaveWatchSpaceResponse(watchSpaceId, result.membershipId(),
-                        result.changedAt(), state.stateVersion(), state.lastSequenceNo());
-        return new RoomMutationCommit<>(state, response, result.events());
+    public RoomMutationCommit<Boolean> apply(RoomState current, Instant mutationInstant) {
+        WatchSpacePersistence.LeaveResult result = persistence.leave(watchSpaceId, userId, mutationInstant);
+        return new RoomMutationCommit<>(result.state(), Boolean.TRUE, result.events());
     }
 }

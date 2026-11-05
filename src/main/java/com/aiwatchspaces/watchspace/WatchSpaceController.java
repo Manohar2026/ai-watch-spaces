@@ -55,19 +55,19 @@ class WatchSpaceController {
     }
 
     @PostMapping("/{watchSpaceId}/leave")
-    Mono<WatchSpaceDtos.LeaveWatchSpaceResponse> leave(
-            @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    Mono<Void> leave(@PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.leave(watchSpaceId, caller);
     }
 
     @PostMapping("/{watchSpaceId}/start")
-    Mono<WatchSpaceDtos.RoomLifecycleResponse> start(
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> start(
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.start(watchSpaceId, caller);
     }
 
     @PostMapping("/{watchSpaceId}/end")
-    Mono<WatchSpaceDtos.RoomLifecycleResponse> end(
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> end(
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.end(watchSpaceId, caller);
     }

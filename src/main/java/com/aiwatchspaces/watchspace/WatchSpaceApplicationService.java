@@ -83,21 +83,6 @@ class WatchSpaceApplicationService {
         });
     }
 
-    Mono<WatchSpaceDtos.LeaveWatchSpaceResponse> leave(UUID watchSpaceId, AuthenticatedUser caller) {
-        return lanes.submit(watchSpaceId,
-                new LeaveWatchSpaceMutation(watchSpaceId, caller.userId(), persistence));
-    }
-
-    Mono<WatchSpaceDtos.RoomLifecycleResponse> start(UUID watchSpaceId, AuthenticatedUser caller) {
-        return lanes.submit(watchSpaceId,
-                new StartWatchSpaceMutation(watchSpaceId, caller.userId(), persistence));
-    }
-
-    Mono<WatchSpaceDtos.RoomLifecycleResponse> end(UUID watchSpaceId, AuthenticatedUser caller) {
-        return lanes.submit(watchSpaceId,
-                new EndWatchSpaceMutation(watchSpaceId, caller.userId(), persistence));
-    }
-
     private void enforceJoinRateLimits(UUID userId, String clientIp) {
         limit("join:user:" + userId, limits.joinPerUser());
         limit("join:ip:" + clientIp, limits.joinPerIp());
@@ -112,6 +97,36 @@ class WatchSpaceApplicationService {
 
     private static ApiException inviteCodeInvalid() {
         return new ApiException(ErrorCode.INVITE_CODE_INVALID, "The invitation code is invalid.");
+    }
+
+
+    Mono<Void> leave(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                new LeaveWatchSpaceMutation(watchSpaceId, caller.userId(), persistence)).then();
+    }
+
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> start(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                        new StartWatchSpaceMutation(watchSpaceId, caller.userId(), persistence))
+                .map(room -> detailsResponse(room, caller.userId()));
+    }
+
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> end(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                        new EndWatchSpaceMutation(watchSpaceId, caller.userId(), persistence))
+                .map(room -> detailsResponse(room, caller.userId()));
+    }
+
+    private static WatchSpaceDtos.WatchSpaceDetailsResponse detailsResponse(RoomState room, UUID callerUserId) {
+        return new WatchSpaceDtos.WatchSpaceDetailsResponse(
+                room.watchSpaceId(), room.titleId(), room.titleName(), room.titleDurationMs(),
+                room.name(), room.privacy(), room.status(), room.hostUserId(),
+                callerUserId.equals(room.hostUserId()) ? "HOST" : "VIEWER",
+                0, room.activeMembershipCount(), room.maxParticipants(), room.aiVerbosity().name(),
+                room.triviaEnabled(), room.votingEnabled(), room.locked(), room.chatMuted(),
+                room.scheduledAt(), room.createdAt(), room.startedAt(), room.endedAt(),
+                room.playbackState(), room.lastPlaybackPositionMs(), room.playbackUpdatedAt(),
+                room.stateVersion(), room.lastSequenceNo());
     }
 
     Mono<Object> get(UUID watchSpaceId, AuthenticatedUser caller) {

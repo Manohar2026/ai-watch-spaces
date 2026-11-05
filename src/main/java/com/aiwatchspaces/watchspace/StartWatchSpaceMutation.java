@@ -3,8 +3,8 @@ package com.aiwatchspaces.watchspace;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Start command; resolves and pins the current timeline/subtitle snapshot in the lane transaction. */
-final class StartWatchSpaceMutation implements RoomMutation<WatchSpaceDtos.RoomLifecycleResponse> {
+/** Host start command: pin the current timeline/subtitles and enter LIVE in one commit. */
+final class StartWatchSpaceMutation implements RoomMutation<RoomState> {
 
     private final UUID watchSpaceId;
     private final UUID hostUserId;
@@ -17,14 +17,9 @@ final class StartWatchSpaceMutation implements RoomMutation<WatchSpaceDtos.RoomL
     }
 
     @Override
-    public RoomMutationCommit<WatchSpaceDtos.RoomLifecycleResponse> apply(
-            RoomState current, Instant mutationInstant) {
+    public RoomMutationCommit<RoomState> apply(RoomState current, Instant mutationInstant) {
         WatchSpacePersistence.LifecycleResult result =
                 persistence.start(watchSpaceId, hostUserId, mutationInstant);
-        RoomState state = result.state();
-        WatchSpaceDtos.RoomLifecycleResponse response = new WatchSpaceDtos.RoomLifecycleResponse(
-                watchSpaceId, state.status(), result.changedAt(), state.sessionCorrelationId(),
-                state.pinnedTimelineVersionId(), state.stateVersion(), state.lastSequenceNo());
-        return new RoomMutationCommit<>(state, response, result.events());
+        return new RoomMutationCommit<>(result.state(), result.state(), result.events());
     }
 }
