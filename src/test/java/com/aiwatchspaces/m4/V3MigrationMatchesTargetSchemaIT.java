@@ -89,7 +89,7 @@ class V3MigrationMatchesTargetSchemaIT {
         HikariDataSource hikari = dataSource.unwrap(HikariDataSource.class);
         String targetDb = "target_v3_" + System.nanoTime();
         migrated.execute("CREATE DATABASE " + targetDb);
-        String targetUrl = hikari.getJdbcUrl().replaceFirst("/[^/?]+(\\\\?|$)", "/" + targetDb + "$1");
+        String targetUrl = hikari.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + targetDb + "$1");
 
         try (Connection connection = DriverManager.getConnection(targetUrl, hikari.getUsername(), hikari.getPassword())) {
             try (Statement statement = connection.createStatement()) {
