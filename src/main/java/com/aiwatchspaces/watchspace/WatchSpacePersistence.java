@@ -732,6 +732,17 @@ class WatchSpacePersistence {
                 """, Map.of(), (rs, rowNum) -> rs.getObject("id", UUID.class));
     }
 
+    /** Lists live rooms that must be paused through their lanes before graceful shutdown. */
+    @Transactional(readOnly = true)
+    List<UUID> findLiveRoomsForShutdown() {
+        return jdbc.query("""
+                SELECT id
+                FROM watch_spaces
+                WHERE status = 'LIVE'
+                ORDER BY created_at, id
+                """, Map.of(), (rs, rowNum) -> rs.getObject("id", UUID.class));
+    }
+
     /** Reconciles one persisted live room after restart; its saved playback position is authoritative. */
     @Transactional
     LifecycleResult recoverAfterRuntimeRestart(UUID watchSpaceId, Instant mutationInstant) {
@@ -782,6 +793,50 @@ class WatchSpacePersistence {
         requireOneRow(updated, "The room changed while runtime recovery was being committed. Retry recovery.");
 
         return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, events);
+    }
+
+    /** Pauses a live room as part of bounded graceful shutdown. */
+    @Transactional
+    LifecycleResult pauseForShutdown(
+            UUID watchSpaceId, long expectedStateVersion, long expectedSequenceNo,
+            int playbackPositionMs, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        if (room.stateVersion() != expectedStateVersion || room.lastSequenceNo() != expectedSequenceNo) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY,
+                    "The room changed while shutdown was being committed. Retry the request.");
+        }
+        if (room.status() != RoomState.Status.LIVE
+                || room.playbackState() == RoomState.PlaybackState.PAUSED) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent paused = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, null,
+                "PLAYBACK_PAUSE", playbackPositionMs, Map.of("reason", "SHUTDOWN"),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(paused);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET playback_state = 'PAUSED',
+                    last_playback_position_ms = :playbackPositionMs,
+                    playback_updated_at = :playbackUpdatedAt,
+                    state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND status = 'LIVE'
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, new MapSqlParameterSource()
+                .addValue("playbackPositionMs", playbackPositionMs)
+                .addValue("playbackUpdatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("nextSequenceNo", nextSequenceNo)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion()));
+        requireOneRow(updated, "The room changed while shutdown was being committed. Retry the request.");
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(paused));
     }
 
     /** Host-only lock/unlock mutation. Repeating the current value is a no-op. */

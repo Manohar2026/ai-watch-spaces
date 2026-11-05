@@ -39,6 +39,7 @@ The migration does not add any new table or column beyond the approved V3 target
 - On an optimistic `CONFLICT_RETRY`, the lane invalidates its cached snapshot after the failed transaction; the rejected request receives the conflict response, and the next command rehydrates the room from PostgreSQL.
 - Startup recovery runs before readiness can report `UP`. Persisted `LIVE` and `HOST_DISCONNECTED` rooms are reconciled through their normal lanes: playback is paused at the stored position, status becomes `HOST_DISCONNECTED`, and `RUNTIME_RECOVERED` is appended (with `PLAYBACK_PAUSE` only when recovery found `PLAYING`). The realtime health indicator remains `OUT_OF_SERVICE` until this pass completes.
 - A scheduled expiry sweep checks `SCHEDULED` rooms using `scheduled_at`, or `created_at` when no schedule exists, then rechecks the deadline under the room lane before closing memberships and appending the final `ROOM_ENDED` event with reason `UNSTARTED_EXPIRED`.
+- On context close, readiness is marked `OUT_OF_SERVICE` before the room registry stops accepting mutations. Existing lanes are drained through final lane commands; all persisted `LIVE` rooms are paused at the estimated current position with a `PLAYBACK_PAUSE` event (`reason=SHUTDOWN`). The drain is bounded to 10 seconds. WebSocket close code 1001 remains a later realtime integration.
 
 ## Verification
 
@@ -52,6 +53,7 @@ The migration does not add any new table or column beyond the approved V3 target
 - `WatchSpaceUnstartedExpiryIT` verifies the 24-hour unscheduled expiry, `scheduled_at` precedence, membership closure, terminal event reason and repeat-sweep idempotence.
 - `WatchSpaceStartupRecoveryIT` verifies recovery of playing and already-paused rooms, preservation of the persisted playback position/session ID, timestamp reuse, event ordering and state/sequence increments.
 - `WatchSpaceOptimisticGuardIT` forces a guarded room update to affect zero rows, verifies the preceding event insert rolls back, and proves the next read reloads the database snapshot before the lane accepts another command.
+- `WatchSpaceGracefulShutdownIT` verifies readiness drops before drain, a playing room is paused at its estimated position with one shutdown event and timestamp reuse, and new mutations receive `503 SERVICE_BUSY`.
 - `RoomLaneTest` verifies cached-state invalidation and DB rehydration after `CONFLICT_RETRY`, plus one `Clock` read per mutation, microsecond truncation and backwards-clock clamping.
 - `docs/m4-watchspace-api.md` documents the implemented M4 Watch Space REST routes, request/response shapes, authorization behavior, current presence limitation and error envelope.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
@@ -62,6 +64,6 @@ Schema parity verifies the migration shape only. The room-creation, mutation-lan
 
 1. Host transfer requires an active, currently connected target; finish it with the M5 connected-session registry. Removed-user socket closure (4411) and chat enforcement of `CHAT_MUTED` also wait for M5 adapters.
 2. Idle auto-end and host/participant grace timers require the M5 connected-session registry; scheduled/unstarted expiry is implemented in M4.
-3. Post-commit broadcast delivery requires the M5 WebSocket broadcaster. M4 stale-lane invalidation is implemented; a conflict is returned to the caller and the next command reloads the persisted snapshot.
+3. Post-commit broadcast delivery and socket closure with code 1001 require the M5 WebSocket broadcaster. M4 stale-lane invalidation and graceful lane drain are implemented.
 4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist.
 5. Manual end-to-end request/response verification against a running development instance, with Postman or equivalent evidence.

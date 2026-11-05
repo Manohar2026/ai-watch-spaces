@@ -9,6 +9,7 @@ import org.springframework.boot.health.contributor.ReactiveHealthIndicator;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -20,7 +21,7 @@ import reactor.core.publisher.Mono;
  * queues below saturation (M4), startup recovery finished (M4).
  */
 @Component("realtimeHealthIndicator")
-class RealtimeHealthIndicator implements ReactiveHealthIndicator, ApplicationListener<ContextClosedEvent> {
+class RealtimeHealthIndicator implements ReactiveHealthIndicator, ApplicationListener<ContextClosedEvent>, Ordered {
 
     private final DbExecutor dbExecutor;
     private final RealtimeHealthProperties properties;
@@ -54,6 +55,11 @@ class RealtimeHealthIndicator implements ReactiveHealthIndicator, ApplicationLis
                 .withDetail("dbExecutorQueueCapacity", capacity)
                 .withDetail("dbExecutorSaturated", saturated)
                 .build();
+    }
+
+    @Override
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
     }
 
     @Override
