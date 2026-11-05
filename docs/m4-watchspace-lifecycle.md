@@ -25,6 +25,9 @@ The migration does not add any new table or column beyond the approved V3 target
 - `POST /api/v1/watch-spaces/{id}/leave` returns `204 No Content`, closes the caller's active membership with `LEFT` and appends `PARTICIPANT_LEFT`; retrying a completed leave is a no-op and does not append another event.
 - `POST /api/v1/watch-spaces/{id}/start` is host-only, requires the host to remain an active member, and accepts only `SCHEDULED` rooms with a `CURRENT`, valid title timeline. It pins that timeline and every `ACTIVE` subtitle track, assigns `session_correlation_id`, and transitions to `LIVE` with playback paused at zero. Repeating start after the room is `LIVE` returns `409 INVALID_PLAYBACK_TRANSITION`.
 - `POST /api/v1/watch-spaces/{id}/end` is host-only. It closes all active memberships with `ROOM_ENDED`, persists `HOST_ENDED`, and appends the terminal `ROOM_ENDED` ledger event. Non-members of `INVITE_ONLY` rooms receive 404 on lifecycle endpoints; an ordinary room member who is not the host receives 403.
+- `POST /api/v1/watch-spaces/{id}/lock` is host-only. It changes the lock flag and appends `ROOM_LOCK_CHANGED`; repeating the current lock value is an idempotent no-op. A lock blocks first-time joiners but does not block a previous non-removed member from quick-rejoining.
+- `PATCH /api/v1/watch-spaces/{id}/settings` is a host-only partial update for `triviaEnabled`, `votingEnabled`, `aiVerbosity`, `chatMuted` and `maxParticipants`. The capacity remains in the 2–50 range and cannot be reduced below the active membership count. Only changed fields are written to `ROOM_SETTINGS_UPDATED`; an empty patch is rejected.
+- `POST /api/v1/watch-spaces/{id}/invite-code` is host-only and returns a replacement `XXXXX-XXXXX` plaintext code once. The previous hash is replaced in the same transaction, the `INVITE_CODE_ROTATED` event contains no invite code, and rotations are limited to 5/hour/room.
 - The request is submitted to a lazily created, per-room FIFO lane with a bounded queue (default 256). The lane reads the injected clock once, truncates to PostgreSQL microsecond precision, and clamps against the previous room event instant.
 - The single creation transaction locks the host account row (so concurrent room creation cannot bypass the five-active-room limit), verifies the published title, inserts the room and host membership, appends `ROOM_CREATED` at sequence 1 and `PARTICIPANT_JOINED` at sequence 2, then advances `last_sequence_no` with an expected-value guard.
 - Invite codes use ten Crockford Base32 characters displayed as `XXXXX-XXXXX`. Only the HMAC-SHA256 digest is stored; the plaintext code is returned in the successful creation response only. The pepper comes from `INVITE_CODE_PEPPER` and must be at least 32 UTF-8 bytes.
@@ -38,14 +41,15 @@ The migration does not add any new table or column beyond the approved V3 target
 - `WatchSpaceCreateIT` verifies room creation, hashed one-time invites, member details, participant output, privacy preview/404 and the host's five-active-room limit.
 - `WatchSpaceJoinIT` verifies both join routes, idempotence, public-link joins, quick-rejoin while locked, locked-room and removed-user rejection, plus 20 concurrent joins into a five-member room (host included) without exceeding capacity.
 - `WatchSpaceLifecycleIT` verifies leave idempotence, the no-current-timeline rejection, timeline/subtitle pinning on start, paused-at-zero initialization, start idempotence, end membership closure and the final `ROOM_ENDED` ledger event.
+- `WatchSpaceControlsIT` verifies lock/quick-rejoin semantics, settings partial updates and capacity validation, host-only controls, invite rotation invalidating the old code, the 5/hour limit and that invite plaintext never reaches the event ledger.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
 
 A passing schema-parity test verifies the migration shape only. It does not verify room creation, the per-room mutation lane, membership rules, capacity races, invite-code security or lifecycle APIs. Those remain in M4.
 
 ## Remaining M4 implementation
 
-1. Lock/unlock, room settings, invite-code rotation, moderation and host transfer.
+1. Moderation (mute/remove) and host transfer, including persistent authorization and ledger coverage.
 2. Lifecycle timers: idle end and unstarted expiry; host socket disconnect/reconnect waits for M5 realtime sessions.
 3. Complete stale-lane rehydration handling and post-commit broadcast integration.
-4. Additional integration coverage for lock/removal/settings/host transfer, monotonic timestamps and guard conflicts.
+4. Additional integration coverage for monotonic timestamps, guard conflicts and settings side effects such as cancellation of open votes when voting is disabled.
 5. REST reference and manual verification evidence.
