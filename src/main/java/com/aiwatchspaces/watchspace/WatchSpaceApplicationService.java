@@ -83,6 +83,21 @@ class WatchSpaceApplicationService {
         });
     }
 
+    Mono<WatchSpaceDtos.LeaveWatchSpaceResponse> leave(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                new LeaveWatchSpaceMutation(watchSpaceId, caller.userId(), persistence));
+    }
+
+    Mono<WatchSpaceDtos.RoomLifecycleResponse> start(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                new StartWatchSpaceMutation(watchSpaceId, caller.userId(), persistence));
+    }
+
+    Mono<WatchSpaceDtos.RoomLifecycleResponse> end(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                new EndWatchSpaceMutation(watchSpaceId, caller.userId(), persistence));
+    }
+
     private void enforceJoinRateLimits(UUID userId, String clientIp) {
         limit("join:user:" + userId, limits.joinPerUser());
         limit("join:ip:" + clientIp, limits.joinPerIp());
