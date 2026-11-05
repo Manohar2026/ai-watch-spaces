@@ -51,6 +51,7 @@ The migration does not add any new table or column beyond the approved V3 target
 - `WatchSpaceModerationIT` verifies mute persistence across leave/rejoin, unmute, terminal removal and rejoin rejection, idempotent repeat removal, self-moderation prevention and host-only authorization.
 - `WatchSpaceUnstartedExpiryIT` verifies the 24-hour unscheduled expiry, `scheduled_at` precedence, membership closure, terminal event reason and repeat-sweep idempotence.
 - `WatchSpaceStartupRecoveryIT` verifies recovery of playing and already-paused rooms, preservation of the persisted playback position/session ID, timestamp reuse, event ordering and state/sequence increments.
+- `WatchSpaceOptimisticGuardIT` forces a guarded room update to affect zero rows, verifies the preceding event insert rolls back, and proves the next read reloads the database snapshot before the lane accepts another command.
 - `RoomLaneTest` verifies cached-state invalidation and DB rehydration after `CONFLICT_RETRY`, plus one `Clock` read per mutation, microsecond truncation and backwards-clock clamping.
 - `docs/m4-watchspace-api.md` documents the implemented M4 Watch Space REST routes, request/response shapes, authorization behavior, current presence limitation and error envelope.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
@@ -62,5 +63,5 @@ A passing schema-parity test verifies the migration shape only. It does not veri
 1. Host transfer requires an active, currently connected target; finish it with the M5 connected-session registry. Removed-user socket closure (4411) and chat enforcement of `CHAT_MUTED` also wait for M5 adapters.
 2. Idle auto-end and host/participant grace timers require the M5 connected-session registry; scheduled/unstarted expiry is implemented in M4.
 3. Post-commit broadcast delivery requires the M5 WebSocket broadcaster. M4 stale-lane invalidation is implemented; a conflict is returned to the caller and the next command reloads the persisted snapshot.
-4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist; add PostgreSQL coverage for a zero-row optimistic-guard conflict and transaction rollback.
+4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist.
 5. REST reference and manual verification evidence.
