@@ -346,6 +346,10 @@ class WatchSpacePersistence {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
         }
         requireHost(room, actorUserId);
+        if (room.status() == RoomState.Status.LIVE) {
+            // Retried start is an acknowledgement of the current live session, not a new transition.
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
         if (room.status() != RoomState.Status.SCHEDULED) {
             throw new ApiException(ErrorCode.INVALID_PLAYBACK_TRANSITION,
                     "Only a scheduled room can be started.");
