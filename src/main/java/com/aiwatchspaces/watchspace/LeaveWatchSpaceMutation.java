@@ -18,7 +18,7 @@ final class LeaveWatchSpaceMutation implements RoomMutation<Boolean> {
 
     @Override
     public RoomMutationCommit<Boolean> apply(RoomState current, Instant mutationInstant) {
-        WatchSpacePersistence.LeaveResult result = persistence.leave(watchSpaceId, userId, mutationInstant);
+        WatchSpacePersistence.LifecycleResult result = persistence.leave(watchSpaceId, userId, mutationInstant);
         return new RoomMutationCommit<>(result.state(), Boolean.TRUE, result.events());
     }
 }

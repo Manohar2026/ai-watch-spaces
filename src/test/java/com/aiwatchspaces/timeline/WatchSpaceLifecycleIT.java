@@ -106,11 +106,12 @@ class WatchSpaceLifecycleIT {
                 WHERE watch_space_id = ? AND locale = 'en'
                 """, UUID.class, roomId)).isEqualTo(subtitleTrackId);
 
-        // Repeated start while LIVE returns the current state without another lifecycle event.
+        // Starting a LIVE room again is rejected as an invalid lifecycle transition.
         client.post().uri("/api/v1/watch-spaces/" + roomId + "/start")
                 .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isEqualTo(409)
+                .expectBody().jsonPath("$.code").isEqualTo("INVALID_PLAYBACK_TRANSITION");
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM room_events WHERE watch_space_id = ? AND event_type = 'ROOM_STARTED'",
                 Integer.class, roomId)).isEqualTo(1);

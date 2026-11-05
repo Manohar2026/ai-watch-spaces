@@ -272,43 +272,45 @@ class WatchSpacePersistence {
     }
 
 
-    /** Explicit leave is idempotent for a user with prior membership in this room. */
+    /** Explicitly closes the caller's active membership and appends PARTICIPANT_LEFT atomically. */
     @Transactional
-    LeaveResult leave(UUID watchSpaceId, UUID userId, Instant mutationInstant) {
+    LifecycleResult leave(UUID watchSpaceId, UUID userId, Instant mutationInstant) {
         PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
         if (room.status() == RoomState.Status.ENDED) {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
         }
 
-        List<UUID> memberships = jdbc.query("""
-                SELECT id
-                FROM watch_space_participants
-                WHERE watch_space_id = :watchSpaceId AND user_id = :userId
-                ORDER BY joined_at DESC, id DESC
-                LIMIT 1
-                FOR UPDATE
-                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId),
-                (rs, rowNum) -> rs.getObject("id", UUID.class));
-        if (memberships.isEmpty()) {
-            if (room.privacy() == RoomState.Privacy.INVITE_ONLY) {
-                throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
-            }
-            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "You are not a member of this room.");
+        Boolean removed = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_moderation
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :userId AND removed_at IS NOT NULL
+                )
+                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId), Boolean.class);
+        if (Boolean.TRUE.equals(removed)) {
+            throw new ApiException(ErrorCode.REMOVED_FROM_ROOM, "You have been removed from this room.");
         }
 
         List<UUID> activeMemberships = jdbc.query("""
                 SELECT id
                 FROM watch_space_participants
                 WHERE watch_space_id = :watchSpaceId AND user_id = :userId AND left_at IS NULL
-                ORDER BY joined_at DESC, id DESC
-                LIMIT 1
                 FOR UPDATE
                 """, Map.of("watchSpaceId", watchSpaceId, "userId", userId),
                 (rs, rowNum) -> rs.getObject("id", UUID.class));
         if (activeMemberships.isEmpty()) {
-            // The caller already left (or their membership was closed); acknowledge retry without
-            // allocating another sequence number or appending a duplicate PARTICIPANT_LEFT event.
-            return new LeaveResult(loadStateInternal(watchSpaceId), List.of());
+            Boolean previousMembership = jdbc.queryForObject("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM watch_space_participants
+                        WHERE watch_space_id = :watchSpaceId AND user_id = :userId
+                    )
+                    """, Map.of("watchSpaceId", watchSpaceId, "userId", userId), Boolean.class);
+            if (Boolean.TRUE.equals(previousMembership)) {
+                return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+            }
+            if (room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+                throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
+            }
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "You are not a member of this room.");
         }
         UUID membershipId = activeMemberships.getFirst();
 
@@ -332,7 +334,8 @@ class WatchSpacePersistence {
         insertEvent(left);
         advanceRoomVersion(room, watchSpaceId, nextSequenceNo);
 
-        return new LeaveResult(loadStateInternal(watchSpaceId), List.of(left));
+        return new LifecycleResult(loadStateInternal(watchSpaceId), membershipId, mutationInstant,
+                List.of(left));
     }
 
     /** Starts a scheduled room and pins its current timeline and ACTIVE subtitle tracks atomically. */
@@ -343,10 +346,6 @@ class WatchSpacePersistence {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
         }
         requireHost(room, actorUserId);
-        if (room.status() == RoomState.Status.LIVE) {
-            // Retried start is an acknowledgement of the existing live session.
-            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
-        }
         if (room.status() != RoomState.Status.SCHEDULED) {
             throw new ApiException(ErrorCode.INVALID_PLAYBACK_TRANSITION,
                     "Only a scheduled room can be started.");
@@ -367,6 +366,16 @@ class WatchSpacePersistence {
                     "The title has no current, valid timeline.");
         }
         UUID timelineVersionId = currentVersions.getFirst();
+        Boolean hostIsMember = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_participants
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :hostUserId AND left_at IS NULL
+                )
+                """, Map.of("watchSpaceId", watchSpaceId, "hostUserId", actorUserId), Boolean.class);
+        if (!Boolean.TRUE.equals(hostIsMember)) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER,
+                    "The host must be an active room member to start it.");
+        }
 
         List<SubtitleTrackInfo> activeTracks = jdbc.query("""
                 SELECT id, locale
@@ -394,7 +403,7 @@ class WatchSpacePersistence {
 
         long nextSequenceNo = room.lastSequenceNo() + 1;
         RoomEvent started = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
-                "ROOM_STARTED", null,
+                "ROOM_STARTED", 0,
                 Map.of("timelineVersionId", timelineVersionId.toString(),
                         "sessionCorrelationId", sessionCorrelationId.toString(),
                         "pinnedSubtitleTrackCount", activeTracks.size()),
@@ -661,15 +670,9 @@ class WatchSpacePersistence {
         }
     }
 
-    record LeaveResult(RoomState state, List<RoomEvent> events) {
-        LeaveResult {
-            events = List.copyOf(events);
-        }
-    }
-
-    private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId, RoomState.Privacy privacy,
-                                          RoomState.Status status, UUID sessionCorrelationId,
-                                          long stateVersion, long lastSequenceNo) {
+    private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId,
+                                          RoomState.Privacy privacy, RoomState.Status status,
+                                          UUID sessionCorrelationId, long stateVersion, long lastSequenceNo) {
     }
 
     private record SubtitleTrackInfo(UUID id, String locale) {
