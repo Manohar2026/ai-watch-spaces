@@ -108,6 +108,20 @@ class WatchSpaceControlsIT {
                 SELECT count(*) FROM room_events
                 WHERE watch_space_id = ? AND event_type = 'ROOM_LOCK_CHANGED'
                 """, Integer.class, roomId)).isEqualTo(1);
+
+        Map<?, ?> unlocked = client.post().uri("/api/v1/watch-spaces/" + roomId + "/lock")
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .bodyValue(Map.of("locked", false))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .returnResult().getResponseBody();
+        assertThat(unlocked).isNotNull();
+        assertThat(unlocked.get("locked")).isEqualTo(false);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM room_events
+                WHERE watch_space_id = ? AND event_type = 'ROOM_LOCK_CHANGED'
+                """, Integer.class, roomId)).isEqualTo(2);
     }
 
     @Test
