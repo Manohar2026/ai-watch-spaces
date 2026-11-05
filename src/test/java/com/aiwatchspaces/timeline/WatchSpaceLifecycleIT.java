@@ -158,6 +158,52 @@ class WatchSpaceLifecycleIT {
                 .expectBody().jsonPath("$.code").isEqualTo("ROOM_ENDED");
     }
 
+    @Test
+    void inviteOnlyNonMembersCannotProbeLifecycleEndpoints() {
+        AuthTestSupport.Account host = newAccount();
+        AuthTestSupport.Account outsider = newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+        Map<?, ?> room = createRoom(host, titleId);
+        UUID roomId = UUID.fromString((String) room.get("watchSpaceId"));
+
+        client.post().uri("/api/v1/watch-spaces/" + roomId + "/start")
+                .headers(headers -> headers.setBearerAuth(outsider.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isNotFound();
+
+        client.post().uri("/api/v1/watch-spaces/" + roomId + "/end")
+                .headers(headers -> headers.setBearerAuth(outsider.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isNotFound();
+
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM watch_spaces WHERE id = ?", String.class, roomId)).isEqualTo("SCHEDULED");
+        assertThat(jdbc.queryForObject(
+                "SELECT last_sequence_no FROM watch_spaces WHERE id = ?", Long.class, roomId)).isEqualTo(2L);
+    }
+
+    @Test
+    void nonHostRoomMemberCannotStartOrEndTheRoom() {
+        AuthTestSupport.Account host = newAccount();
+        AuthTestSupport.Account guest = newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+        Map<?, ?> room = createRoom(host, titleId);
+        UUID roomId = UUID.fromString((String) room.get("watchSpaceId"));
+        joinById(guest, roomId, (String) room.get("inviteCode"));
+
+        client.post().uri("/api/v1/watch-spaces/" + roomId + "/start")
+                .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("NOT_ROOM_HOST");
+
+        client.post().uri("/api/v1/watch-spaces/" + roomId + "/end")
+                .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("NOT_ROOM_HOST");
+    }
+
     private AuthTestSupport.Account newAccount() {
         rateLimiter.reset();
         return auth.newAccount();
