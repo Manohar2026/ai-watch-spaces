@@ -3,11 +3,9 @@ package com.aiwatchspaces.watchspace;
 import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /** Watch-space REST rate limits (SYSTEM_DESIGN §8.7). */
-@Component
 @ConfigurationProperties("aiws.rate-limits.watchspace")
 public record WatchSpaceRateLimitProperties(
         @DefaultValue({"10", "1m"}) Limit joinPerUser,
