@@ -18,7 +18,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 
 ## Current implementation status
 
-- **Backend M4 (in progress):** Flyway V3 adds Watch Space, membership, moderation and room-event ledger tables; PostgreSQL schema-parity integration coverage is being added on `feature/m4-watchspace-lifecycle`.
+- **Backend M4 (in progress):** Flyway V3 and PostgreSQL schema-parity coverage are in place. The first functional slice adds the serialized room mutation lane, invite-code hashing, and `POST /api/v1/watch-spaces` creation with host membership and initial ledger events on `feature/m4-watchspace-lifecycle`.
 
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).

@@ -54,6 +54,10 @@ aiws:
   db-executor:
     threads: ${DB_POOL_SIZE:10}
     queue-capacity: 500
+  watchspace:
+    # HMAC secret for room invite codes; at least 32 UTF-8 bytes.
+    invite-code-pepper: ${INVITE_CODE_PEPPER:}
+    lane-queue-capacity: 256
   realtime:
     health:
       saturation-ratio: 0.9

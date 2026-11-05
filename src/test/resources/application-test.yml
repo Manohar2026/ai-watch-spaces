@@ -13,6 +13,9 @@ aiws:
     # Test-only key (base64 of a 35-byte ASCII string). Not a secret; never used outside tests.
     jwt-signing-key: dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS0zMi1ieXRlcyE=
     issuer: ai-watch-spaces-test
+  watchspace:
+    # Test-only value; never use outside the test profile.
+    invite-code-pepper: test-only-invite-code-pepper-value-32-bytes-minimum
   rate-limits:
     # Generous so ordinary tests are not throttled; RateLimitIT uses the real defaults.
     auth:
