@@ -377,17 +377,6 @@ class WatchSpacePersistence {
                     "The title has no current, valid timeline.");
         }
         UUID timelineVersionId = currentVersions.getFirst();
-        Boolean hostIsMember = jdbc.queryForObject("""
-                SELECT EXISTS (
-                    SELECT 1 FROM watch_space_participants
-                    WHERE watch_space_id = :watchSpaceId AND user_id = :hostUserId AND left_at IS NULL
-                )
-                """, Map.of("watchSpaceId", watchSpaceId, "hostUserId", actorUserId), Boolean.class);
-        if (!Boolean.TRUE.equals(hostIsMember)) {
-            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER,
-                    "The host must be an active room member to start it.");
-        }
-
         List<SubtitleTrackInfo> activeTracks = jdbc.query("""
                 SELECT id, locale
                 FROM subtitle_tracks
