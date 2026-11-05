@@ -99,6 +99,24 @@ public final class WatchSpaceDtos {
             long lastSequenceNo) {
     }
 
+    public record LeaveWatchSpaceResponse(
+            UUID watchSpaceId,
+            UUID membershipId,
+            Instant leftAt,
+            long stateVersion,
+            long lastSequenceNo) {
+    }
+
+    public record RoomLifecycleResponse(
+            UUID watchSpaceId,
+            RoomState.Status status,
+            Instant changedAt,
+            UUID sessionCorrelationId,
+            UUID pinnedTimelineVersionId,
+            long stateVersion,
+            long lastSequenceNo) {
+    }
+
     public record ParticipantResponse(
             UUID userId,
             String displayName,
