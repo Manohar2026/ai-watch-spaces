@@ -495,10 +495,163 @@ class WatchSpacePersistence {
         return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(ended));
     }
 
+
+    /** Host-only lock/unlock mutation. Repeating the current value is a no-op. */
+    @Transactional
+    LifecycleResult setLocked(UUID watchSpaceId, UUID actorUserId, boolean locked, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHostMutation(room, actorUserId);
+        if (room.locked() == locked) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent event = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "ROOM_LOCK_CHANGED", null, Map.of("locked", locked),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(event);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET is_locked = :locked,
+                    state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, Map.of("locked", locked, "nextSequenceNo", nextSequenceNo,
+                "watchSpaceId", watchSpaceId,
+                "expectedSequenceNo", room.lastSequenceNo(),
+                "expectedStateVersion", room.stateVersion()));
+        requireOneRow(updated, "The room changed while this command was being committed. Retry the request.");
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(event));
+    }
+
+    /** Partial host settings update; only changed fields are written to the ledger. */
+    @Transactional
+    LifecycleResult updateSettings(UUID watchSpaceId, UUID actorUserId,
+                                   WatchSpaceApplicationService.SettingsOptions patch,
+                                   Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHostMutation(room, actorUserId);
+
+        Map<String, Object> changedFields = new java.util.LinkedHashMap<>();
+        if (patch.triviaEnabled() != null && patch.triviaEnabled() != room.triviaEnabled()) {
+            changedFields.put("triviaEnabled", patch.triviaEnabled());
+        }
+        if (patch.votingEnabled() != null && patch.votingEnabled() != room.votingEnabled()) {
+            changedFields.put("votingEnabled", patch.votingEnabled());
+        }
+        if (patch.aiVerbosity() != null && patch.aiVerbosity() != room.aiVerbosity()) {
+            changedFields.put("aiVerbosity", patch.aiVerbosity().name());
+        }
+        if (patch.chatMuted() != null && patch.chatMuted() != room.chatMuted()) {
+            changedFields.put("chatMuted", patch.chatMuted());
+        }
+        if (patch.maxParticipants() != null && patch.maxParticipants() != room.maxParticipants()) {
+            Long activeCount = jdbc.queryForObject("""
+                    SELECT count(*)
+                    FROM watch_space_participants
+                    WHERE watch_space_id = :watchSpaceId AND left_at IS NULL
+                    """, Map.of("watchSpaceId", watchSpaceId), Long.class);
+            if (patch.maxParticipants() < (activeCount == null ? 0 : activeCount)) {
+                throw new ApiException(ErrorCode.ROOM_FULL,
+                        "maxParticipants cannot be lower than the current active membership count.");
+            }
+            changedFields.put("maxParticipants", patch.maxParticipants());
+        }
+        if (changedFields.isEmpty()) {
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
+        }
+
+        Map<String, String> columns = Map.of(
+                "triviaEnabled", "trivia_enabled",
+                "votingEnabled", "voting_enabled",
+                "aiVerbosity", "ai_verbosity",
+                "chatMuted", "chat_muted",
+                "maxParticipants", "max_participants");
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("nextSequenceNo", room.lastSequenceNo() + 1)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion());
+        List<String> assignments = new java.util.ArrayList<>();
+        changedFields.forEach((field, value) -> {
+            String parameter = "setting_" + field;
+            assignments.add(columns.get(field) + " = :" + parameter);
+            parameters.addValue(parameter, value);
+        });
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent event = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "ROOM_SETTINGS_UPDATED", null, Map.of("changedFields", changedFields),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(event);
+
+        String updateSql = "UPDATE watch_spaces SET " + String.join(", ", assignments)
+                + ", state_version = state_version + 1, last_sequence_no = :nextSequenceNo"
+                + " WHERE id = :watchSpaceId AND last_sequence_no = :expectedSequenceNo"
+                + " AND state_version = :expectedStateVersion";
+        int updated = jdbc.update(updateSql, parameters);
+        requireOneRow(updated, "The room changed while this command was being committed. Retry the request.");
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(event));
+    }
+
+    /** Issues a replacement invite digest; the event payload intentionally never contains the plaintext code. */
+    @Transactional
+    RotationResult rotateInviteCode(UUID watchSpaceId, UUID actorUserId,
+                                    String newInviteCodeHash, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHostMutation(room, actorUserId);
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent event = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "INVITE_CODE_ROTATED", null, Map.of("rotatedAt", mutationInstant.toString()),
+                null, room.sessionCorrelationId(), mutationInstant);
+        insertEvent(event);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET invite_code_hash = :inviteCodeHash,
+                    invite_code_rotated_at = :rotatedAt,
+                    state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, new MapSqlParameterSource()
+                .addValue("inviteCodeHash", newInviteCodeHash)
+                .addValue("rotatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("nextSequenceNo", nextSequenceNo)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion()));
+        requireOneRow(updated, "The room changed while this command was being committed. Retry the request.");
+
+        return new RotationResult(loadStateInternal(watchSpaceId), List.of(event));
+    }
+
+    private void requireHostMutation(PersistedLifecycleRoom room, UUID actorUserId) {
+        requireVisibleTo(room, actorUserId);
+        if (room.status() == RoomState.Status.ENDED) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+        requireHost(room, actorUserId);
+    }
+
+    private static void requireOneRow(int updated, String message) {
+        if (updated != 1) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY, message);
+        }
+    }
+
     private PersistedLifecycleRoom lockLifecycleRoom(UUID watchSpaceId) {
         List<PersistedLifecycleRoom> rooms = jdbc.query("""
                 SELECT id, title_id, host_user_id, privacy, status, session_correlation_id,
-                       state_version, last_sequence_no
+                       is_locked, max_participants, ai_verbosity, trivia_enabled, voting_enabled, chat_muted,
+                       invite_code_hash, state_version, last_sequence_no
                 FROM watch_spaces
                 WHERE id = :watchSpaceId
                 FOR UPDATE
@@ -510,6 +663,13 @@ class WatchSpacePersistence {
                         RoomState.Privacy.valueOf(rs.getString("privacy")),
                         RoomState.Status.valueOf(rs.getString("status")),
                         rs.getObject("session_correlation_id", UUID.class),
+                        rs.getBoolean("is_locked"),
+                        rs.getInt("max_participants"),
+                        RoomState.AiVerbosity.valueOf(rs.getString("ai_verbosity")),
+                        rs.getBoolean("trivia_enabled"),
+                        rs.getBoolean("voting_enabled"),
+                        rs.getBoolean("chat_muted"),
+                        rs.getString("invite_code_hash"),
                         rs.getLong("state_version"),
                         rs.getLong("last_sequence_no")));
         if (rooms.isEmpty()) {
@@ -697,7 +857,16 @@ class WatchSpacePersistence {
 
     private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId,
                                           RoomState.Privacy privacy, RoomState.Status status,
-                                          UUID sessionCorrelationId, long stateVersion, long lastSequenceNo) {
+                                          UUID sessionCorrelationId, boolean locked, int maxParticipants,
+                                          RoomState.AiVerbosity aiVerbosity, boolean triviaEnabled,
+                                          boolean votingEnabled, boolean chatMuted, String inviteCodeHash,
+                                          long stateVersion, long lastSequenceNo) {
+    }
+
+    record RotationResult(RoomState state, List<RoomEvent> events) {
+        RotationResult {
+            events = List.copyOf(events);
+        }
     }
 
     private record SubtitleTrackInfo(UUID id, String locale) {
