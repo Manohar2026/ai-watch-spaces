@@ -272,23 +272,43 @@ class WatchSpacePersistence {
     }
 
 
-    /** Explicitly closes the caller's active membership and appends PARTICIPANT_LEFT atomically. */
+    /** Explicit leave is idempotent for a user with prior membership in this room. */
     @Transactional
-    LifecycleResult leave(UUID watchSpaceId, UUID userId, Instant mutationInstant) {
+    LeaveResult leave(UUID watchSpaceId, UUID userId, Instant mutationInstant) {
         PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
         if (room.status() == RoomState.Status.ENDED) {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+
+        List<UUID> memberships = jdbc.query("""
+                SELECT id
+                FROM watch_space_participants
+                WHERE watch_space_id = :watchSpaceId AND user_id = :userId
+                ORDER BY joined_at DESC, id DESC
+                LIMIT 1
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        if (memberships.isEmpty()) {
+            if (room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+                throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
+            }
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "You are not a member of this room.");
         }
 
         List<UUID> activeMemberships = jdbc.query("""
                 SELECT id
                 FROM watch_space_participants
                 WHERE watch_space_id = :watchSpaceId AND user_id = :userId AND left_at IS NULL
+                ORDER BY joined_at DESC, id DESC
+                LIMIT 1
                 FOR UPDATE
                 """, Map.of("watchSpaceId", watchSpaceId, "userId", userId),
                 (rs, rowNum) -> rs.getObject("id", UUID.class));
         if (activeMemberships.isEmpty()) {
-            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "You are not an active member of this room.");
+            // The caller already left (or their membership was closed); acknowledge retry without
+            // allocating another sequence number or appending a duplicate PARTICIPANT_LEFT event.
+            return new LeaveResult(loadStateInternal(watchSpaceId), List.of());
         }
         UUID membershipId = activeMemberships.getFirst();
 
@@ -312,17 +332,20 @@ class WatchSpacePersistence {
         insertEvent(left);
         advanceRoomVersion(room, watchSpaceId, nextSequenceNo);
 
-        return new LifecycleResult(loadStateInternal(watchSpaceId), membershipId, mutationInstant,
-                List.of(left));
+        return new LeaveResult(loadStateInternal(watchSpaceId), List.of(left));
     }
 
     /** Starts a scheduled room and pins its current timeline and ACTIVE subtitle tracks atomically. */
     @Transactional
     LifecycleResult start(UUID watchSpaceId, UUID actorUserId, Instant mutationInstant) {
         PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
-        requireHost(room, actorUserId);
         if (room.status() == RoomState.Status.ENDED) {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+        requireHost(room, actorUserId);
+        if (room.status() == RoomState.Status.LIVE) {
+            // Retried start is an acknowledgement of the existing live session.
+            return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of());
         }
         if (room.status() != RoomState.Status.SCHEDULED) {
             throw new ApiException(ErrorCode.INVALID_PLAYBACK_TRANSITION,
@@ -415,10 +438,10 @@ class WatchSpacePersistence {
     @Transactional
     LifecycleResult end(UUID watchSpaceId, UUID actorUserId, Instant mutationInstant) {
         PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
-        requireHost(room, actorUserId);
         if (room.status() == RoomState.Status.ENDED) {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
         }
+        requireHost(room, actorUserId);
 
         jdbc.update("""
                 UPDATE watch_space_participants
@@ -431,7 +454,7 @@ class WatchSpacePersistence {
         long nextSequenceNo = room.lastSequenceNo() + 1;
         RoomEvent ended = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
                 "ROOM_ENDED", null, Map.of("reason", "HOST_ENDED"),
-                null, room.status() == RoomState.Status.SCHEDULED ? null : null, mutationInstant);
+                null, room.sessionCorrelationId(), mutationInstant);
         insertEvent(ended);
 
         int updated = jdbc.update("""
@@ -464,7 +487,8 @@ class WatchSpacePersistence {
 
     private PersistedLifecycleRoom lockLifecycleRoom(UUID watchSpaceId) {
         List<PersistedLifecycleRoom> rooms = jdbc.query("""
-                SELECT id, title_id, host_user_id, status, state_version, last_sequence_no
+                SELECT id, title_id, host_user_id, status, session_correlation_id,
+                       state_version, last_sequence_no
                 FROM watch_spaces
                 WHERE id = :watchSpaceId
                 FOR UPDATE
@@ -474,6 +498,7 @@ class WatchSpacePersistence {
                         rs.getObject("title_id", UUID.class),
                         rs.getObject("host_user_id", UUID.class),
                         RoomState.Status.valueOf(rs.getString("status")),
+                        rs.getObject("session_correlation_id", UUID.class),
                         rs.getLong("state_version"),
                         rs.getLong("last_sequence_no")));
         if (rooms.isEmpty()) {
@@ -635,8 +660,14 @@ class WatchSpacePersistence {
         }
     }
 
+    record LeaveResult(RoomState state, List<RoomEvent> events) {
+        LeaveResult {
+            events = List.copyOf(events);
+        }
+    }
+
     private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId, RoomState.Status status,
-                                          long stateVersion, long lastSequenceNo) {
+                                          UUID sessionCorrelationId, long stateVersion, long lastSequenceNo) {
     }
 
     private record SubtitleTrackInfo(UUID id, String locale) {
