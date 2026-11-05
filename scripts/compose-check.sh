@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Docker Compose check: builds the jar and image, starts PostgreSQL 17 + app, and prints health and
-# the Flyway history. Requires a .env (see .env.example) with a real JWT_SIGNING_KEY.
+# the Flyway history. Requires a .env (see .env.example) with a real JWT_SIGNING_KEY and INVITE_CODE_PEPPER (>=32 UTF-8 bytes).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

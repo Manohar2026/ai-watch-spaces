@@ -25,6 +25,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env}
+      INVITE_CODE_PEPPER: ${INVITE_CODE_PEPPER:?set INVITE_CODE_PEPPER (>=32 UTF-8 bytes) in .env}
       JWT_ISSUER: ${JWT_ISSUER:-ai-watch-spaces}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       AIWS_ASSETS_DIRECTORY: /var/lib/aiws/assets
