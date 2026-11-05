@@ -302,10 +302,16 @@ class WatchSpaceControlsIT {
     }
 
     private Map<?, ?> joinById(AuthTestSupport.Account account, UUID roomId, String inviteCode) {
-        return client.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
-                .headers(headers -> headers.setBearerAuth(account.tokens().accessToken()))
-                .bodyValue(Map.of("inviteCode", inviteCode))
-                .exchange()
+        var request = client.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
+                .headers(headers -> headers.setBearerAuth(account.tokens().accessToken()));
+        if (inviteCode != null) {
+            return request.bodyValue(Map.of("inviteCode", inviteCode))
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody(Map.class)
+                    .returnResult().getResponseBody();
+        }
+        return request.exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
                 .returnResult().getResponseBody();
