@@ -271,6 +271,239 @@ class WatchSpacePersistence {
                 false, rejoined, List.of(joined));
     }
 
+
+    /** Explicitly closes the caller's active membership and appends PARTICIPANT_LEFT atomically. */
+    @Transactional
+    LifecycleResult leave(UUID watchSpaceId, UUID userId, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        if (room.status() == RoomState.Status.ENDED) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+
+        List<UUID> activeMemberships = jdbc.query("""
+                SELECT id
+                FROM watch_space_participants
+                WHERE watch_space_id = :watchSpaceId AND user_id = :userId AND left_at IS NULL
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        if (activeMemberships.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "You are not an active member of this room.");
+        }
+        UUID membershipId = activeMemberships.getFirst();
+
+        int closed = jdbc.update("""
+                UPDATE watch_space_participants
+                SET left_at = :leftAt, leave_reason = 'LEFT'
+                WHERE id = :membershipId AND left_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("leftAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("membershipId", membershipId));
+        if (closed != 1) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY,
+                    "The membership changed while this command was being committed. Retry the request.");
+        }
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent left = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, userId,
+                "PARTICIPANT_LEFT", null, Map.of("userId", userId.toString(),
+                "membershipId", membershipId.toString(), "reason", "LEFT"),
+                null, null, mutationInstant);
+        insertEvent(left);
+        advanceRoomVersion(room, watchSpaceId, nextSequenceNo);
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), membershipId, mutationInstant,
+                List.of(left));
+    }
+
+    /** Starts a scheduled room and pins its current timeline and ACTIVE subtitle tracks atomically. */
+    @Transactional
+    LifecycleResult start(UUID watchSpaceId, UUID actorUserId, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHost(room, actorUserId);
+        if (room.status() == RoomState.Status.ENDED) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+        if (room.status() != RoomState.Status.SCHEDULED) {
+            throw new ApiException(ErrorCode.INVALID_PLAYBACK_TRANSITION,
+                    "Only a scheduled room can be started.");
+        }
+
+        List<UUID> currentVersions = jdbc.query("""
+                SELECT v.id
+                FROM title_timeline_versions v
+                JOIN titles t ON t.id = v.title_id
+                WHERE v.title_id = :titleId
+                  AND v.status = 'CURRENT'
+                  AND v.validation_status = 'VALID'
+                  AND t.status = 'PUBLISHED'
+                """, Map.of("titleId", room.titleId()),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        if (currentVersions.isEmpty()) {
+            throw new ApiException(ErrorCode.NO_CURRENT_TIMELINE,
+                    "The title has no current, valid timeline.");
+        }
+        UUID timelineVersionId = currentVersions.getFirst();
+
+        List<SubtitleTrackInfo> activeTracks = jdbc.query("""
+                SELECT id, locale
+                FROM subtitle_tracks
+                WHERE title_id = :titleId AND status = 'ACTIVE'
+                ORDER BY locale
+                """, Map.of("titleId", room.titleId()),
+                (rs, rowNum) -> new SubtitleTrackInfo(
+                        rs.getObject("id", UUID.class), rs.getString("locale")));
+
+        UUID sessionCorrelationId = UUID.randomUUID();
+        for (SubtitleTrackInfo track : activeTracks) {
+            jdbc.update("""
+                    INSERT INTO room_subtitle_tracks
+                        (watch_space_id, title_id, locale, subtitle_track_id, pinned_at)
+                    VALUES
+                        (:watchSpaceId, :titleId, :locale, :subtitleTrackId, :pinnedAt)
+                    """, new MapSqlParameterSource()
+                    .addValue("watchSpaceId", watchSpaceId)
+                    .addValue("titleId", room.titleId())
+                    .addValue("locale", track.locale())
+                    .addValue("subtitleTrackId", track.id())
+                    .addValue("pinnedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE));
+        }
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent started = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "ROOM_STARTED", null,
+                Map.of("timelineVersionId", timelineVersionId.toString(),
+                        "sessionCorrelationId", sessionCorrelationId.toString(),
+                        "pinnedSubtitleTrackCount", activeTracks.size()),
+                null, sessionCorrelationId, mutationInstant);
+        insertEvent(started);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET status = 'LIVE',
+                    started_at = :startedAt,
+                    session_correlation_id = :sessionCorrelationId,
+                    pinned_timeline_version_id = :timelineVersionId,
+                    playback_state = 'PAUSED',
+                    last_playback_position_ms = 0,
+                    playback_updated_at = :playbackUpdatedAt,
+                    host_disconnected_at = NULL,
+                    state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND status = 'SCHEDULED'
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, new MapSqlParameterSource()
+                .addValue("startedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("sessionCorrelationId", sessionCorrelationId)
+                .addValue("timelineVersionId", timelineVersionId)
+                .addValue("playbackUpdatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("nextSequenceNo", nextSequenceNo)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion()));
+        if (updated != 1) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY,
+                    "The room changed while this command was being committed. Retry the request.");
+        }
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(started));
+    }
+
+    /** Ends a room and closes every active membership at the ROOM_ENDED event instant. */
+    @Transactional
+    LifecycleResult end(UUID watchSpaceId, UUID actorUserId, Instant mutationInstant) {
+        PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireHost(room, actorUserId);
+        if (room.status() == RoomState.Status.ENDED) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+
+        jdbc.update("""
+                UPDATE watch_space_participants
+                SET left_at = :endedAt, leave_reason = 'ROOM_ENDED'
+                WHERE watch_space_id = :watchSpaceId AND left_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("endedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("watchSpaceId", watchSpaceId));
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent ended = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
+                "ROOM_ENDED", null, Map.of("reason", "HOST_ENDED"),
+                null, room.status() == RoomState.Status.SCHEDULED ? null : null, mutationInstant);
+        insertEvent(ended);
+
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET status = 'ENDED',
+                    ended_reason = 'HOST_ENDED',
+                    ended_at = :endedAt,
+                    playback_state = 'PAUSED',
+                    playback_updated_at = :playbackUpdatedAt,
+                    state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND status <> 'ENDED'
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, new MapSqlParameterSource()
+                .addValue("endedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("playbackUpdatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("nextSequenceNo", nextSequenceNo)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("expectedSequenceNo", room.lastSequenceNo())
+                .addValue("expectedStateVersion", room.stateVersion()));
+        if (updated != 1) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY,
+                    "The room changed while this command was being committed. Retry the request.");
+        }
+
+        return new LifecycleResult(loadStateInternal(watchSpaceId), null, mutationInstant, List.of(ended));
+    }
+
+    private PersistedLifecycleRoom lockLifecycleRoom(UUID watchSpaceId) {
+        List<PersistedLifecycleRoom> rooms = jdbc.query("""
+                SELECT id, title_id, host_user_id, status, state_version, last_sequence_no
+                FROM watch_spaces
+                WHERE id = :watchSpaceId
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId),
+                (rs, rowNum) -> new PersistedLifecycleRoom(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("title_id", UUID.class),
+                        rs.getObject("host_user_id", UUID.class),
+                        RoomState.Status.valueOf(rs.getString("status")),
+                        rs.getLong("state_version"),
+                        rs.getLong("last_sequence_no")));
+        if (rooms.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
+        }
+        return rooms.getFirst();
+    }
+
+    private static void requireHost(PersistedLifecycleRoom room, UUID actorUserId) {
+        if (!room.hostUserId().equals(actorUserId)) {
+            throw new ApiException(ErrorCode.NOT_ROOM_HOST, "Only the room host may perform this action.");
+        }
+    }
+
+    private void advanceRoomVersion(PersistedLifecycleRoom room, UUID watchSpaceId, long nextSequenceNo) {
+        int updated = jdbc.update("""
+                UPDATE watch_spaces
+                SET state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, Map.of("watchSpaceId", watchSpaceId, "nextSequenceNo", nextSequenceNo,
+                "expectedSequenceNo", room.lastSequenceNo(), "expectedStateVersion", room.stateVersion()));
+        if (updated != 1) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY,
+                    "The room changed while this command was being committed. Retry the request.");
+        }
+    }
+
     @Transactional(readOnly = true)
     RoomState loadState(UUID watchSpaceId) {
         return loadStateInternal(watchSpaceId);
@@ -394,6 +627,19 @@ class WatchSpacePersistence {
         String name = titleName + " watch party";
         int points = name.codePointCount(0, name.length());
         return points <= 120 ? name : name.substring(0, name.offsetByCodePoints(0, 120));
+    }
+
+    record LifecycleResult(RoomState state, UUID membershipId, Instant changedAt, List<RoomEvent> events) {
+        LifecycleResult {
+            events = List.copyOf(events);
+        }
+    }
+
+    private record PersistedLifecycleRoom(UUID id, UUID titleId, UUID hostUserId, RoomState.Status status,
+                                          long stateVersion, long lastSequenceNo) {
+    }
+
+    private record SubtitleTrackInfo(UUID id, String locale) {
     }
 
     record JoinResult(RoomState state, UUID membershipId, Instant joinedAt,
