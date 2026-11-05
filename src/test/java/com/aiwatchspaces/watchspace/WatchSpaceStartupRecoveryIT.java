@@ -167,7 +167,7 @@ class WatchSpaceStartupRecoveryIT {
                     (id, title_id, version_number, status, source_format, raw_document, schema_version,
                      content_hash, validation_status, validation_errors, validated_at, uploaded_by, published_at)
                 VALUES (?, ?, 1, 'CURRENT', 'JSON', ?, 1, ?, 'VALID', '[]'::jsonb, now(), ?, now())
-                """, UUID.randomUUID(), titleId, "{"schemaVersion":1,"events":[]}",
+                """, UUID.randomUUID(), titleId, "{\"schemaVersion\":1,\"events\":[]}",
                 "b".repeat(64), uploadedBy);
     }
 
