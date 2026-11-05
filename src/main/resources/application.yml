@@ -65,6 +65,7 @@ aiws:
     # SCHEDULED rooms expire this long after scheduled_at, or created_at when unscheduled.
     unstarted-expiry: 24h
     expiry-scan-delay-ms: 60000
+    startup-recovery-timeout: 2m
   realtime:
     health:
       saturation-ratio: 0.9
