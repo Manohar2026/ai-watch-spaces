@@ -117,6 +117,62 @@ class WatchSpaceApplicationService {
                 .map(room -> detailsResponse(room, caller.userId()));
     }
 
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> setLocked(
+            UUID watchSpaceId, AuthenticatedUser caller, boolean locked) {
+        return lanes.submit(watchSpaceId,
+                        new SetWatchSpaceLockMutation(watchSpaceId, caller.userId(), locked, persistence))
+                .map(room -> detailsResponse(room, caller.userId()));
+    }
+
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> updateSettings(
+            UUID watchSpaceId, AuthenticatedUser caller, WatchSpaceDtos.UpdateRoomSettingsRequest request) {
+        SettingsOptions patch = settingsOptions(request);
+        return lanes.submit(watchSpaceId,
+                        new UpdateWatchSpaceSettingsMutation(watchSpaceId, caller.userId(), patch, persistence))
+                .map(room -> detailsResponse(room, caller.userId()));
+    }
+
+    Mono<WatchSpaceDtos.RotateInviteCodeResponse> rotateInviteCode(
+            UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.snapshot(watchSpaceId).flatMap(snapshot -> {
+            requireControlHost(snapshot, caller.userId());
+            limit("invite-code:rotation:room:" + watchSpaceId, limits.inviteCodeRotationPerRoom());
+            return lanes.submit(watchSpaceId,
+                    new RotateWatchSpaceInviteCodeMutation(watchSpaceId, caller.userId(), persistence, inviteCodes));
+        });
+    }
+
+    private static void requireControlHost(RoomState room, UUID userId) {
+        requireNotRemoved(room, userId);
+        if (!hasMembership(room, userId) && room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+            throw notFound();
+        }
+        if (room.status() == RoomState.Status.ENDED) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+        if (!room.hostUserId().equals(userId)) {
+            throw new ApiException(ErrorCode.NOT_ROOM_HOST, "Only the room host may perform this action.");
+        }
+    }
+
+    private static SettingsOptions settingsOptions(WatchSpaceDtos.UpdateRoomSettingsRequest request) {
+        if (request.triviaEnabled() == null
+                && request.votingEnabled() == null
+                && request.aiVerbosity() == null
+                && request.chatMuted() == null
+                && request.maxParticipants() == null) {
+            throw validation("settings", "at least one setting must be provided");
+        }
+        RoomState.AiVerbosity aiVerbosity = request.aiVerbosity() == null ? null
+                : parseEnum(request.aiVerbosity(), RoomState.AiVerbosity.class, null, "aiVerbosity");
+        if (request.maxParticipants() != null
+                && (request.maxParticipants() < 2 || request.maxParticipants() > 50)) {
+            throw validation("maxParticipants", "must be between 2 and 50");
+        }
+        return new SettingsOptions(request.triviaEnabled(), request.votingEnabled(), aiVerbosity,
+                request.chatMuted(), request.maxParticipants());
+    }
+
     private static WatchSpaceDtos.WatchSpaceDetailsResponse detailsResponse(RoomState room, UUID callerUserId) {
         return new WatchSpaceDtos.WatchSpaceDetailsResponse(
                 room.watchSpaceId(), room.titleId(), room.titleName(), room.titleDurationMs(),
@@ -224,6 +280,14 @@ class WatchSpaceApplicationService {
     private static ApiException validation(String field, String message) {
         return new ApiException(ErrorCode.VALIDATION_FAILED, "Request validation failed.",
                 java.util.List.of(new ErrorDetail(field, "INVALID_VALUE", message)));
+    }
+
+    record SettingsOptions(
+            Boolean triviaEnabled,
+            Boolean votingEnabled,
+            RoomState.AiVerbosity aiVerbosity,
+            Boolean chatMuted,
+            Integer maxParticipants) {
     }
 
     record CreationOptions(
