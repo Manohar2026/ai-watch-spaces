@@ -51,6 +51,9 @@ aiws:
       login-per-email: { limit: 5, window: 1m }
       login-per-ip: { limit: 20, window: 1m }
       register-per-ip: { limit: 5, window: 1h }
+    watchspace:
+      join-per-user: { limit: 10, window: 1m }
+      join-per-ip: { limit: 30, window: 1m }
   db-executor:
     threads: ${DB_POOL_SIZE:10}
     queue-capacity: 500

@@ -3,6 +3,8 @@ package com.aiwatchspaces.watchspace;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -140,6 +142,136 @@ class WatchSpacePersistence {
     }
 
     @Transactional(readOnly = true)
+    Optional<UUID> findRoomIdByInviteHash(String inviteCodeHash) {
+        List<UUID> roomIds = jdbc.query("""
+                SELECT id FROM watch_spaces WHERE invite_code_hash = :inviteCodeHash
+                """, Map.of("inviteCodeHash", inviteCodeHash),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        return roomIds.stream().findFirst();
+    }
+
+    /**
+     * Re-checks all join rules while holding the room row lock. The caller is already inside the
+     * serialized room lane; the lock and sequence guard also protect the durable write boundary.
+     */
+    @Transactional
+    JoinResult join(UUID watchSpaceId, UUID userId, String inviteCodeHash, Instant mutationInstant) {
+        List<PersistedRoom> rooms = jdbc.query("""
+                SELECT id, privacy, status, invite_code_hash, is_locked, max_participants,
+                       state_version, last_sequence_no
+                FROM watch_spaces
+                WHERE id = :watchSpaceId
+                FOR UPDATE
+                """, Map.of("watchSpaceId", watchSpaceId),
+                (rs, rowNum) -> new PersistedRoom(
+                        rs.getObject("id", UUID.class),
+                        RoomState.Privacy.valueOf(rs.getString("privacy")),
+                        RoomState.Status.valueOf(rs.getString("status")),
+                        rs.getString("invite_code_hash"),
+                        rs.getBoolean("is_locked"),
+                        rs.getInt("max_participants"),
+                        rs.getLong("state_version"),
+                        rs.getLong("last_sequence_no")));
+        if (rooms.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
+        }
+        PersistedRoom room = rooms.getFirst();
+
+        if (room.status() == RoomState.Status.ENDED) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+        }
+
+        Boolean removed = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_moderation
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :userId AND removed_at IS NOT NULL
+                )
+                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId), Boolean.class);
+        if (Boolean.TRUE.equals(removed)) {
+            throw new ApiException(ErrorCode.REMOVED_FROM_ROOM, "You have been removed from this room.");
+        }
+
+        List<MembershipInfo> activeMemberships = jdbc.query("""
+                SELECT id, joined_at
+                FROM watch_space_participants
+                WHERE watch_space_id = :watchSpaceId AND user_id = :userId AND left_at IS NULL
+                ORDER BY joined_at DESC, id DESC
+                LIMIT 1
+                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId),
+                (rs, rowNum) -> new MembershipInfo(
+                        rs.getObject("id", UUID.class), instant(rs, "joined_at")));
+        if (!activeMemberships.isEmpty()) {
+            MembershipInfo active = activeMemberships.getFirst();
+            return new JoinResult(loadStateInternal(watchSpaceId), active.membershipId(),
+                    active.joinedAt(), true, false, List.of());
+        }
+
+        Boolean hasPreviousMembership = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_participants
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :userId
+                )
+                """, Map.of("watchSpaceId", watchSpaceId, "userId", userId), Boolean.class);
+        boolean rejoined = Boolean.TRUE.equals(hasPreviousMembership);
+
+        if (!rejoined) {
+            if (room.privacy() == RoomState.Privacy.INVITE_ONLY
+                    && !sameDigest(inviteCodeHash, room.inviteCodeHash())) {
+                throw new ApiException(ErrorCode.INVITE_CODE_INVALID, "The invitation code is invalid.");
+            }
+            if (room.locked()) {
+                throw new ApiException(ErrorCode.ROOM_LOCKED, "This room is locked to new members.");
+            }
+        }
+
+        Long activeCount = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM watch_space_participants
+                WHERE watch_space_id = :watchSpaceId AND left_at IS NULL
+                """, Map.of("watchSpaceId", watchSpaceId), Long.class);
+        if (activeCount != null && activeCount >= room.maxParticipants()) {
+            throw new ApiException(ErrorCode.ROOM_FULL, "This room has reached its participant limit.");
+        }
+
+        UUID membershipId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO watch_space_participants
+                    (id, watch_space_id, user_id, joined_at, last_seen_at)
+                VALUES
+                    (:id, :watchSpaceId, :userId, :joinedAt, :lastSeenAt)
+                """, new MapSqlParameterSource()
+                .addValue("id", membershipId)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("userId", userId)
+                .addValue("joinedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("lastSeenAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE));
+
+        long nextSequenceNo = room.lastSequenceNo() + 1;
+        RoomEvent joined = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, userId,
+                "PARTICIPANT_JOINED", null,
+                Map.of("userId", userId.toString(), "membershipId", membershipId.toString()),
+                null, null, mutationInstant);
+        insertEvent(joined);
+
+        int guarded = jdbc.update("""
+                UPDATE watch_spaces
+                SET state_version = state_version + 1,
+                    last_sequence_no = :nextSequenceNo
+                WHERE id = :watchSpaceId
+                  AND last_sequence_no = :expectedSequenceNo
+                  AND state_version = :expectedStateVersion
+                """, Map.of("watchSpaceId", watchSpaceId, "nextSequenceNo", nextSequenceNo,
+                "expectedSequenceNo", room.lastSequenceNo(), "expectedStateVersion", room.stateVersion()));
+        if (guarded != 1) {
+            throw new ApiException(ErrorCode.CONFLICT_RETRY,
+                    "The room changed while this command was being committed. Retry the request.");
+        }
+
+        return new JoinResult(loadStateInternal(watchSpaceId), membershipId, mutationInstant,
+                false, rejoined, List.of(joined));
+    }
+
+    @Transactional(readOnly = true)
     RoomState loadState(UUID watchSpaceId) {
         return loadStateInternal(watchSpaceId);
     }
@@ -243,6 +375,12 @@ class WatchSpacePersistence {
                 null, List.of(), Map.of());
     }
 
+    private static boolean sameDigest(String supplied, String expected) {
+        return supplied != null && expected != null
+                && MessageDigest.isEqual(supplied.getBytes(StandardCharsets.US_ASCII),
+                        expected.getBytes(StandardCharsets.US_ASCII));
+    }
+
     private static OffsetDateTime utc(Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
@@ -258,10 +396,25 @@ class WatchSpacePersistence {
         return points <= 120 ? name : name.substring(0, name.offsetByCodePoints(0, 120));
     }
 
+    record JoinResult(RoomState state, UUID membershipId, Instant joinedAt,
+                      boolean alreadyMember, boolean rejoined, List<RoomEvent> events) {
+        JoinResult {
+            events = List.copyOf(events);
+        }
+    }
+
     record CreationResult(RoomState state, List<RoomEvent> events) {
         CreationResult {
             events = List.copyOf(events);
         }
+    }
+
+    private record PersistedRoom(UUID id, RoomState.Privacy privacy, RoomState.Status status,
+                                 String inviteCodeHash, boolean locked, int maxParticipants,
+                                 long stateVersion, long lastSequenceNo) {
+    }
+
+    private record MembershipInfo(UUID membershipId, Instant joinedAt) {
     }
 
     private record TitleInfo(UUID id, String name, int durationMs) {

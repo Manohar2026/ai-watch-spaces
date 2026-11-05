@@ -9,6 +9,8 @@ import com.aiwatchspaces.common.error.ApiException;
 import com.aiwatchspaces.common.error.ErrorCode;
 import com.aiwatchspaces.common.error.ErrorDetail;
 import com.aiwatchspaces.common.security.AuthenticatedUser;
+import com.aiwatchspaces.common.ratelimit.RateLimiter;
+import com.aiwatchspaces.infrastructure.db.DbExecutor;
 import com.aiwatchspaces.common.text.PlainText;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -20,12 +22,19 @@ class WatchSpaceApplicationService {
     private final RoomLaneRegistry lanes;
     private final WatchSpacePersistence persistence;
     private final InviteCodeService inviteCodes;
+    private final DbExecutor db;
+    private final RateLimiter rateLimiter;
+    private final WatchSpaceRateLimitProperties limits;
 
     WatchSpaceApplicationService(RoomLaneRegistry lanes, WatchSpacePersistence persistence,
-                                 InviteCodeService inviteCodes) {
+                                 InviteCodeService inviteCodes, DbExecutor db, RateLimiter rateLimiter,
+                                 WatchSpaceRateLimitProperties limits) {
         this.lanes = lanes;
         this.persistence = persistence;
         this.inviteCodes = inviteCodes;
+        this.db = db;
+        this.rateLimiter = rateLimiter;
+        this.limits = limits;
     }
 
     Mono<WatchSpaceDtos.CreateWatchSpaceResponse> create(
@@ -35,6 +44,59 @@ class WatchSpaceApplicationService {
         CreateWatchSpaceMutation mutation = new CreateWatchSpaceMutation(
                 watchSpaceId, caller.userId(), options, persistence, inviteCodes);
         return lanes.submit(watchSpaceId, mutation);
+    }
+
+
+    Mono<WatchSpaceDtos.JoinWatchSpaceResponse> joinByInviteCode(
+            AuthenticatedUser caller, String rawInviteCode, String clientIp) {
+        return Mono.defer(() -> {
+            enforceJoinRateLimits(caller.userId(), clientIp);
+            final String inviteCodeHash;
+            try {
+                inviteCodeHash = inviteCodes.hash(rawInviteCode);
+            } catch (IllegalArgumentException invalid) {
+                return Mono.error(inviteCodeInvalid());
+            }
+            return db.call(() -> persistence.findRoomIdByInviteHash(inviteCodeHash))
+                    .flatMap(roomId -> roomId.<Mono<WatchSpaceDtos.JoinWatchSpaceResponse>>map(id ->
+                            lanes.submit(id, new JoinWatchSpaceMutation(
+                                    id, caller.userId(), inviteCodeHash, persistence)))
+                            .orElseGet(() -> Mono.error(inviteCodeInvalid())));
+        });
+    }
+
+    Mono<WatchSpaceDtos.JoinWatchSpaceResponse> joinById(
+            UUID watchSpaceId, AuthenticatedUser caller, String rawInviteCode, String clientIp) {
+        return Mono.defer(() -> {
+            enforceJoinRateLimits(caller.userId(), clientIp);
+            String inviteCodeHash = null;
+            if (rawInviteCode != null && !rawInviteCode.isBlank()) {
+                try {
+                    inviteCodeHash = inviteCodes.hash(rawInviteCode);
+                } catch (IllegalArgumentException invalid) {
+                    // A malformed code behaves like a missing/wrong code. PUBLIC_LINK and quick-rejoin
+                    // do not need a code; INVITE_ONLY new members receive the same INVITE_CODE_INVALID.
+                }
+            }
+            return lanes.submit(watchSpaceId,
+                    new JoinWatchSpaceMutation(watchSpaceId, caller.userId(), inviteCodeHash, persistence));
+        });
+    }
+
+    private void enforceJoinRateLimits(UUID userId, String clientIp) {
+        limit("join:user:" + userId, limits.joinPerUser());
+        limit("join:ip:" + clientIp, limits.joinPerIp());
+    }
+
+    private void limit(String key, WatchSpaceRateLimitProperties.Limit configured) {
+        RateLimiter.Decision decision = rateLimiter.tryAcquire(key, configured.limit(), configured.window());
+        if (!decision.allowed()) {
+            throw ApiException.rateLimited(decision.retryAfterSeconds());
+        }
+    }
+
+    private static ApiException inviteCodeInvalid() {
+        return new ApiException(ErrorCode.INVITE_CODE_INVALID, "The invitation code is invalid.");
     }
 
     Mono<Object> get(UUID watchSpaceId, AuthenticatedUser caller) {

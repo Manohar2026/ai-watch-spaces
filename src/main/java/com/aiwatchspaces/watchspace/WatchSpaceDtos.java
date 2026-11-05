@@ -26,6 +26,22 @@ public final class WatchSpaceDtos {
             Instant scheduledAt) {
     }
 
+    public record JoinByInviteRequest(@NotNull String inviteCode) {
+    }
+
+    public record JoinByIdRequest(String inviteCode) {
+    }
+
+    public record JoinWatchSpaceResponse(
+            UUID watchSpaceId,
+            UUID membershipId,
+            UUID userId,
+            Instant joinedAt,
+            String roomRole,
+            boolean alreadyMember,
+            boolean rejoined) {
+    }
+
     public record RoomSettingsResponse(
             int maxParticipants,
             String aiVerbosity,

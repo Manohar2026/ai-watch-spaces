@@ -1,11 +1,13 @@
 package com.aiwatchspaces.watchspace;
 
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.UUID;
 
 import com.aiwatchspaces.common.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +36,24 @@ class WatchSpaceController {
         return watchSpaces.create(caller, request);
     }
 
+    @PostMapping("/join")
+    Mono<WatchSpaceDtos.JoinWatchSpaceResponse> joinByInviteCode(
+            AuthenticatedUser caller,
+            @Valid @RequestBody WatchSpaceDtos.JoinByInviteRequest request,
+            ServerHttpRequest http) {
+        return watchSpaces.joinByInviteCode(caller, request.inviteCode(), clientIp(http));
+    }
+
+    @PostMapping("/{watchSpaceId}/join")
+    Mono<WatchSpaceDtos.JoinWatchSpaceResponse> joinById(
+            @PathVariable UUID watchSpaceId,
+            AuthenticatedUser caller,
+            @RequestBody(required = false) WatchSpaceDtos.JoinByIdRequest request,
+            ServerHttpRequest http) {
+        return watchSpaces.joinById(watchSpaceId, caller,
+                request == null ? null : request.inviteCode(), clientIp(http));
+    }
+
     @GetMapping("/{watchSpaceId}")
     Mono<Object> get(@PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.get(watchSpaceId, caller);
@@ -43,5 +63,11 @@ class WatchSpaceController {
     Mono<List<WatchSpaceDtos.ParticipantResponse>> participants(
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.participants(watchSpaceId, caller);
+    }
+
+    /** Proxy headers are not trusted in this single-instance local deployment. */
+    private static String clientIp(ServerHttpRequest request) {
+        InetSocketAddress remote = request.getRemoteAddress();
+        return remote == null || remote.getAddress() == null ? "unknown" : remote.getAddress().getHostAddress();
     }
 }
