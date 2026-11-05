@@ -56,7 +56,7 @@ The migration does not add any new table or column beyond the approved V3 target
 - `docs/m4-watchspace-api.md` documents the implemented M4 Watch Space REST routes, request/response shapes, authorization behavior, current presence limitation and error envelope.
 - The backend CI workflow now runs for pull requests into `main` and pushes to `feature/m4-watchspace-lifecycle`.
 
-A passing schema-parity test verifies the migration shape only. It does not verify room creation, the per-room mutation lane, membership rules, capacity races, invite-code security or lifecycle APIs. Those remain in M4.
+Schema parity verifies the migration shape only. The room-creation, mutation-lane, membership, capacity, invite-code, lifecycle, recovery and expiry behaviors are covered separately by the integration tests listed above. A green CI run is automated verification; it does not substitute for manual request/response verification against a running development instance.
 
 ## Remaining M4 implementation
 
@@ -64,4 +64,4 @@ A passing schema-parity test verifies the migration shape only. It does not veri
 2. Idle auto-end and host/participant grace timers require the M5 connected-session registry; scheduled/unstarted expiry is implemented in M4.
 3. Post-commit broadcast delivery requires the M5 WebSocket broadcaster. M4 stale-lane invalidation is implemented; a conflict is returned to the caller and the next command reloads the persisted snapshot.
 4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist.
-5. REST reference and manual verification evidence.
+5. Manual end-to-end request/response verification against a running development instance, with Postman or equivalent evidence.
