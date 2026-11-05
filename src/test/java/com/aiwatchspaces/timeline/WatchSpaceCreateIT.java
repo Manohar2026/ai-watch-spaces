@@ -78,6 +78,61 @@ class WatchSpaceCreateIT {
                 .containsExactly("ROOM_CREATED", "PARTICIPANT_JOINED");
         assertThat(jdbc.queryForObject(
                 "SELECT last_sequence_no FROM watch_spaces WHERE id = ?", Long.class, roomId)).isEqualTo(2L);
+
+        client.get().uri("/api/v1/watch-spaces/" + roomId)
+                .headers(headers -> headers.setBearerAuth(account.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.watchSpaceId").isEqualTo(roomId.toString())
+                .jsonPath("$.myRoomRole").isEqualTo("HOST")
+                .jsonPath("$.activeMembershipCount").isEqualTo(1);
+
+        client.get().uri("/api/v1/watch-spaces/" + roomId + "/participants")
+                .headers(headers -> headers.setBearerAuth(account.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(1)
+                .jsonPath("$[0].displayName").isEqualTo("Test User")
+                .jsonPath("$[0].roomRole").isEqualTo("HOST")
+                .jsonPath("$[0].connected").isEqualTo(false);
+
+        AuthTestSupport.Account outsider = auth.newAccount();
+        client.get().uri("/api/v1/watch-spaces/" + roomId)
+                .headers(headers -> headers.setBearerAuth(outsider.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void publicLinkNonMemberReceivesOnlyTheLimitedPreview() {
+        AuthTestSupport.Account host = auth.newAccount();
+        AuthTestSupport.Account outsider = auth.newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+
+        Map<?, ?> response = create(host, Map.of(
+                "titleId", titleId.toString(),
+                "privacy", "PUBLIC_LINK",
+                "name", "Open watch room"))
+                .expectStatus().isCreated()
+                .expectBody(Map.class)
+                .returnResult().getResponseBody();
+        UUID roomId = UUID.fromString((String) response.get("watchSpaceId"));
+
+        client.get().uri("/api/v1/watch-spaces/" + roomId)
+                .headers(headers -> headers.setBearerAuth(outsider.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.name").isEqualTo("Open watch room")
+                .jsonPath("$.titleName").isEqualTo("M4 Test Title")
+                .jsonPath("$.status").isEqualTo("SCHEDULED")
+                .jsonPath("$.participantCount").isEqualTo(0)
+                .jsonPath("$.maxParticipants").isEqualTo(25)
+                .jsonPath("$.locked").isEqualTo(false)
+                .jsonPath("$.hostUserId").doesNotExist()
+                .jsonPath("$.watchSpaceId").doesNotExist();
     }
 
     @Test

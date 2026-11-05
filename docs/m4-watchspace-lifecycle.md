@@ -17,6 +17,8 @@ The migration does not add any new table or column beyond the approved V3 target
 ## Implemented functional slice: room creation
 
 - `POST /api/v1/watch-spaces` creates a `SCHEDULED` room for a `PUBLISHED` title; omitted settings use the v0.4 defaults and the name defaults to "{title} watch party".
+- `GET /api/v1/watch-spaces/{id}` returns full details to a member, a deliberately limited preview to non-members of `PUBLIC_LINK` rooms, and 404 to non-members of `INVITE_ONLY` rooms. Removed users receive `REMOVED_FROM_ROOM`.
+- `GET /api/v1/watch-spaces/{id}/participants` returns active memberships, role derived from `host_user_id`, display names and persisted mute state. `connected=false` and `connectionQuality=UNKNOWN` until M5 adds the realtime session registry.
 - The request is submitted to a lazily created, per-room FIFO lane with a bounded queue (default 256). The lane reads the injected clock once, truncates to PostgreSQL microsecond precision, and clamps against the previous room event instant.
 - The single creation transaction locks the host account row (so concurrent room creation cannot bypass the five-active-room limit), verifies the published title, inserts the room and host membership, appends `ROOM_CREATED` at sequence 1 and `PARTICIPANT_JOINED` at sequence 2, then advances `last_sequence_no` with an expected-value guard.
 - Invite codes use ten Crockford Base32 characters displayed as `XXXXX-XXXXX`. Only the HMAC-SHA256 digest is stored; the plaintext code is returned in the successful creation response only. The pepper comes from `INVITE_CODE_PEPPER` and must be at least 32 UTF-8 bytes.
@@ -32,9 +34,8 @@ A passing schema-parity test verifies the migration shape only. It does not veri
 
 ## Remaining M4 implementation
 
-1. Room details/preview and participant reads with privacy-aware 404 behavior.
-2. Invite-code join and room-ID join, quick-rejoin, leave, start and end.
-3. Lock/unlock, room settings, invite-code rotation, moderation and host transfer.
-4. Complete stale-lane rehydration handling and post-commit broadcast integration.
-5. Integration tests for capacity races, privacy, lock, removals, monotonic sequence numbers and guard conflicts.
-6. REST reference and manual verification evidence.
+1. Invite-code join and room-ID join, quick-rejoin, leave, start and end.
+2. Lock/unlock, room settings, invite-code rotation, moderation and host transfer.
+3. Complete stale-lane rehydration handling and post-commit broadcast integration.
+4. Integration tests for capacity races, privacy, lock, removals, monotonic sequence numbers and guard conflicts.
+5. REST reference and manual verification evidence.

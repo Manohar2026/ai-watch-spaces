@@ -64,6 +64,27 @@ final class RoomLane {
         }
     }
 
+    /**
+     * Returns an immutable snapshot without entering the mutation queue. A cold lane hydrates once
+     * from PostgreSQL and publishes with CAS; if a concurrent mutation has already published a
+     * newer state, that state wins and is returned.
+     */
+    Mono<RoomState> snapshot() {
+        return Mono.defer(() -> {
+            RoomState current = state.get();
+            if (current != null) {
+                lastActivityNanos = System.nanoTime();
+                return Mono.just(current);
+            }
+            return db.call(() -> persistence.loadState(watchSpaceId))
+                    .map(loaded -> {
+                        state.compareAndSet(null, loaded);
+                        lastActivityNanos = System.nanoTime();
+                        return state.get();
+                    });
+        });
+    }
+
     boolean isEvictable(long nowNanos) {
         return pendingTasks.get() == 0 && connectedSessions.get() == 0 && pendingTimers.get() == 0
                 && nowNanos - lastActivityNanos >= IDLE_EVICTION_NANOS;

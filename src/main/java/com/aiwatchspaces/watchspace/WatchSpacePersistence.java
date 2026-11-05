@@ -162,13 +162,14 @@ class WatchSpacePersistence {
         RoomState room = rooms.getFirst();
 
         List<RoomState.Participant> participants = jdbc.query("""
-                SELECT id, user_id, joined_at, last_seen_at, left_at, leave_reason
-                FROM watch_space_participants
-                WHERE watch_space_id = :watchSpaceId
-                ORDER BY joined_at, id
+                SELECT p.id, p.user_id, u.display_name, p.joined_at, p.last_seen_at, p.left_at, p.leave_reason
+                FROM watch_space_participants p
+                JOIN app_users u ON u.id = p.user_id
+                WHERE p.watch_space_id = :watchSpaceId
+                ORDER BY p.joined_at, p.id
                 """, Map.of("watchSpaceId", watchSpaceId),
                 (rs, rowNum) -> new RoomState.Participant(
-                        rs.getObject("id", UUID.class), rs.getObject("user_id", UUID.class),
+                        rs.getObject("id", UUID.class), rs.getObject("user_id", UUID.class), rs.getString("display_name"),
                         instant(rs, "joined_at"), instant(rs, "last_seen_at"),
                         instant(rs, "left_at"), rs.getString("leave_reason")));
 

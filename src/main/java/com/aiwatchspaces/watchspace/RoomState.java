@@ -30,8 +30,8 @@ public record RoomState(
     public enum PlaybackState { PLAYING, PAUSED, BUFFERING }
     public enum AiVerbosity { MINIMAL, NORMAL, CHATTY }
 
-    public record Participant(UUID membershipId, UUID userId, Instant joinedAt, Instant lastSeenAt,
-                              Instant leftAt, String leaveReason) {
+    public record Participant(UUID membershipId, UUID userId, String displayName, Instant joinedAt,
+                              Instant lastSeenAt, Instant leftAt, String leaveReason) {
     }
 
     public record Moderation(boolean muted, Instant mutedAt, UUID mutedBy, Instant removedAt,

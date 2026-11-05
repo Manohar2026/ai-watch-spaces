@@ -1,6 +1,7 @@
 package com.aiwatchspaces.watchspace;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -34,6 +35,72 @@ class WatchSpaceApplicationService {
         CreateWatchSpaceMutation mutation = new CreateWatchSpaceMutation(
                 watchSpaceId, caller.userId(), options, persistence, inviteCodes);
         return lanes.submit(watchSpaceId, mutation);
+    }
+
+    Mono<Object> get(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.snapshot(watchSpaceId).<Object>map(room -> {
+            requireNotRemoved(room, caller.userId());
+            boolean hasMembership = hasMembership(room, caller.userId());
+            if (!hasMembership && room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+                throw notFound();
+            }
+            if (!hasMembership) {
+                // The ADR-005-connected socket count is zero until M5 adds the realtime session registry.
+                return new WatchSpaceDtos.WatchSpacePreviewResponse(room.name(), room.titleName(), room.status(),
+                        0, room.maxParticipants(), room.locked());
+            }
+            return new WatchSpaceDtos.WatchSpaceDetailsResponse(
+                    room.watchSpaceId(), room.titleId(), room.titleName(), room.titleDurationMs(),
+                    room.name(), room.privacy(), room.status(), room.hostUserId(),
+                    caller.userId().equals(room.hostUserId()) ? "HOST" : "VIEWER",
+                    0, room.activeMembershipCount(), room.maxParticipants(), room.aiVerbosity().name(),
+                    room.triviaEnabled(), room.votingEnabled(), room.locked(), room.chatMuted(),
+                    room.scheduledAt(), room.createdAt(), room.startedAt(), room.endedAt(),
+                    room.playbackState(), room.lastPlaybackPositionMs(), room.playbackUpdatedAt(),
+                    room.stateVersion(), room.lastSequenceNo());
+        });
+    }
+
+    Mono<List<WatchSpaceDtos.ParticipantResponse>> participants(UUID watchSpaceId, AuthenticatedUser caller) {
+        return lanes.snapshot(watchSpaceId).map(room -> {
+            requireMember(room, caller.userId());
+            return room.participants().stream()
+                    .filter(participant -> participant.leftAt() == null)
+                    .map(participant -> {
+                        RoomState.Moderation moderation = room.moderation().get(participant.userId());
+                        boolean muted = moderation != null && moderation.muted();
+                        return new WatchSpaceDtos.ParticipantResponse(
+                                participant.userId(), participant.displayName(),
+                                participant.userId().equals(room.hostUserId()) ? "HOST" : "VIEWER",
+                                false, "UNKNOWN", muted);
+                    })
+                    .toList();
+        });
+    }
+
+    private static boolean hasMembership(RoomState room, UUID userId) {
+        return room.participants().stream().anyMatch(participant -> participant.userId().equals(userId));
+    }
+
+    private static void requireNotRemoved(RoomState room, UUID userId) {
+        RoomState.Moderation moderation = room.moderation().get(userId);
+        if (moderation != null && moderation.removedAt() != null) {
+            throw new ApiException(ErrorCode.REMOVED_FROM_ROOM, "You have been removed from this room.");
+        }
+    }
+
+    private static void requireMember(RoomState room, UUID userId) {
+        requireNotRemoved(room, userId);
+        if (!hasMembership(room, userId)) {
+            if (room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+                throw notFound();
+            }
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "You are not a member of this room.");
+        }
+    }
+
+    private static ApiException notFound() {
+        return new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
     }
 
     private static CreationOptions options(WatchSpaceDtos.CreateWatchSpaceRequest request) {

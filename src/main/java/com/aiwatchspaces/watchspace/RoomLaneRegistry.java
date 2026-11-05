@@ -48,6 +48,15 @@ class RoomLaneRegistry {
         });
     }
 
+    Mono<RoomState> snapshot(UUID watchSpaceId) {
+        RoomLane lane;
+        synchronized (this) {
+            lane = lanes.computeIfAbsent(watchSpaceId,
+                    id -> new RoomLane(id, queueCapacity, db, persistence, broadcaster, clock));
+        }
+        return lane.snapshot();
+    }
+
     @Scheduled(fixedDelay = 60_000L)
     synchronized void evictIdleLanes() {
         long now = System.nanoTime();
