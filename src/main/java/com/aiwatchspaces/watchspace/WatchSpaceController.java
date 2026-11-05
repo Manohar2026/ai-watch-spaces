@@ -54,6 +54,24 @@ class WatchSpaceController {
                 request == null ? null : request.inviteCode(), clientIp(http));
     }
 
+    @PostMapping("/{watchSpaceId}/leave")
+    Mono<WatchSpaceDtos.LeaveWatchSpaceResponse> leave(
+            @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
+        return watchSpaces.leave(watchSpaceId, caller);
+    }
+
+    @PostMapping("/{watchSpaceId}/start")
+    Mono<WatchSpaceDtos.RoomLifecycleResponse> start(
+            @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
+        return watchSpaces.start(watchSpaceId, caller);
+    }
+
+    @PostMapping("/{watchSpaceId}/end")
+    Mono<WatchSpaceDtos.RoomLifecycleResponse> end(
+            @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
+        return watchSpaces.end(watchSpaceId, caller);
+    }
+
     @GetMapping("/{watchSpaceId}")
     Mono<Object> get(@PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return watchSpaces.get(watchSpaceId, caller);
