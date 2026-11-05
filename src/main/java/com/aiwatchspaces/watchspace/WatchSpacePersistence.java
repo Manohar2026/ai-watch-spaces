@@ -431,7 +431,7 @@ class WatchSpacePersistence {
         long nextSequenceNo = room.lastSequenceNo() + 1;
         RoomEvent ended = new RoomEvent(UUID.randomUUID(), watchSpaceId, nextSequenceNo, actorUserId,
                 "ROOM_ENDED", null, Map.of("reason", "HOST_ENDED"),
-                null, room.status() == RoomState.Status.SCHEDULED ? null : null, mutationInstant);
+                null, null, mutationInstant);
         insertEvent(ended);
 
         int updated = jdbc.update("""
