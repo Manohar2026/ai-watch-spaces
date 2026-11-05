@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   pull_request:
-    branches: [feature/full-stack-architecture]
+    branches: [main, feature/full-stack-architecture]
     paths:
       - "src/**"
       - "pom.xml"
@@ -13,7 +13,7 @@ on:
       - "SYSTEM_DESIGN.md"
       - ".github/workflows/backend-ci.yml"
   push:
-    branches: [feature/m3-catalog-timeline]
+    branches: [feature/m3-catalog-timeline, feature/m4-watchspace-lifecycle]
     paths:
       - "src/**"
       - "pom.xml"
