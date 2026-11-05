@@ -54,6 +54,7 @@ aiws:
     watchspace:
       join-per-user: { limit: 10, window: 1m }
       join-per-ip: { limit: 30, window: 1m }
+      invite-code-rotation-per-room: { limit: 5, window: 1h }
   db-executor:
     threads: ${DB_POOL_SIZE:10}
     queue-capacity: 500
