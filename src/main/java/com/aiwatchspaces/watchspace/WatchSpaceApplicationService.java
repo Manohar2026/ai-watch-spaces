@@ -142,6 +142,19 @@ class WatchSpaceApplicationService {
         });
     }
 
+    Mono<WatchSpaceDtos.WatchSpaceDetailsResponse> setParticipantMuted(
+            UUID watchSpaceId, UUID targetUserId, AuthenticatedUser caller, boolean muted) {
+        return lanes.submit(watchSpaceId,
+                        new SetParticipantMuteMutation(
+                                watchSpaceId, caller.userId(), targetUserId, muted, persistence))
+                .map(room -> detailsResponse(room, caller.userId()));
+    }
+
+    Mono<Void> removeParticipant(UUID watchSpaceId, UUID targetUserId, AuthenticatedUser caller) {
+        return lanes.submit(watchSpaceId,
+                new RemoveParticipantMutation(watchSpaceId, caller.userId(), targetUserId, persistence)).then();
+    }
+
     private static void requireControlHost(RoomState room, UUID userId) {
         requireNotRemoved(room, userId);
         if (!hasMembership(room, userId) && room.privacy() == RoomState.Privacy.INVITE_ONLY) {
