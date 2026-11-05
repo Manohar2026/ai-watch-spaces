@@ -4,6 +4,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,9 +98,9 @@ class WatchSpacePersistence {
                 .addValue("aiVerbosity", aiVerbosity.name())
                 .addValue("triviaEnabled", triviaEnabled)
                 .addValue("votingEnabled", votingEnabled)
-                .addValue("scheduledAt", scheduledAt, Types.TIMESTAMP_WITH_TIMEZONE)
-                .addValue("createdAt", mutationInstant)
-                .addValue("playbackUpdatedAt", mutationInstant));
+                .addValue("scheduledAt", utc(scheduledAt), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("createdAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("playbackUpdatedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE));
         if (inserted == 0) {
             return Optional.empty();
         }
@@ -109,8 +111,12 @@ class WatchSpacePersistence {
                     (id, watch_space_id, user_id, joined_at, last_seen_at)
                 VALUES
                     (:id, :watchSpaceId, :userId, :joinedAt, :lastSeenAt)
-                """, Map.of("id", membershipId, "watchSpaceId", watchSpaceId, "userId", hostUserId,
-                "joinedAt", mutationInstant, "lastSeenAt", mutationInstant));
+                """, new MapSqlParameterSource()
+                .addValue("id", membershipId)
+                .addValue("watchSpaceId", watchSpaceId)
+                .addValue("userId", hostUserId)
+                .addValue("joinedAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("lastSeenAt", utc(mutationInstant), Types.TIMESTAMP_WITH_TIMEZONE));
 
         RoomEvent created = new RoomEvent(UUID.randomUUID(), watchSpaceId, 1, hostUserId, "ROOM_CREATED",
                 null, Map.of("titleId", titleId.toString()), null, null, mutationInstant);
@@ -215,7 +221,7 @@ class WatchSpacePersistence {
                 .addValue("payload", jsonMapper.writeValueAsString(event.payload()))
                 .addValue("idempotencyKey", event.idempotencyKey())
                 .addValue("correlationId", event.correlationId())
-                .addValue("occurredAt", event.occurredAt()));
+                .addValue("occurredAt", utc(event.occurredAt()), Types.TIMESTAMP_WITH_TIMEZONE));
     }
 
     private static RoomState mapRoom(ResultSet rs, int rowNum) throws SQLException {
@@ -234,6 +240,10 @@ class WatchSpacePersistence {
                 rs.getObject("pinned_timeline_version_id", UUID.class), rs.getInt("last_playback_position_ms"),
                 instant(rs, "playback_updated_at"), rs.getLong("state_version"), rs.getLong("last_sequence_no"),
                 null, List.of(), Map.of());
+    }
+
+    private static OffsetDateTime utc(Instant instant) {
+        return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

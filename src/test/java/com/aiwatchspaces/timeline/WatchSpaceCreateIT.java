@@ -29,9 +29,6 @@ class WatchSpaceCreateIT {
     @Autowired
     JwtEncoder encoder;
 
-    @Autowired
-    SampleContentSeeder seeder;
-
     private AuthTestSupport auth;
 
     @BeforeEach
@@ -42,9 +39,9 @@ class WatchSpaceCreateIT {
     @Test
     void createsScheduledRoomWithHashedOneTimeInviteAndInitialLedger() {
         AuthTestSupport.Account account = auth.newAccount();
-        seeder.seed(account.userId());
+        UUID titleId = createPublishedTitle(account.userId());
 
-        Map<?, ?> response = create(account, Map.of("titleId", SampleContentSeeder.TITLE_ID.toString()))
+        Map<?, ?> response = create(account, Map.of("titleId", titleId.toString()))
                 .expectStatus().isCreated()
                 .expectBody(Map.class)
                 .returnResult().getResponseBody();
@@ -86,15 +83,27 @@ class WatchSpaceCreateIT {
     @Test
     void rejectsTheSixthNonEndedRoomForOneHost() {
         AuthTestSupport.Account account = auth.newAccount();
-        seeder.seed(account.userId());
+        UUID titleId = createPublishedTitle(account.userId());
 
         for (int i = 0; i < 5; i++) {
-            create(account, Map.of("titleId", SampleContentSeeder.TITLE_ID.toString()))
+            create(account, Map.of("titleId", titleId.toString()))
                     .expectStatus().isCreated();
         }
-        create(account, Map.of("titleId", SampleContentSeeder.TITLE_ID.toString()))
+        create(account, Map.of("titleId", titleId.toString()))
                 .expectStatus().isEqualTo(409)
                 .expectBody().jsonPath("$.code").isEqualTo("HOST_ROOM_LIMIT");
+    }
+
+    private UUID createPublishedTitle(UUID createdBy) {
+        UUID titleId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO titles
+                    (id, slug, name, description, duration_ms, video_asset_uri, default_locale, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, 'en', 'PUBLISHED', ?)
+                """, titleId, "m4-room-" + titleId, "M4 Test Title",
+                "A private fixture for watch-space creation.", 60_000,
+                "asset://m4-room-test/video.mp4", createdBy);
+        return titleId;
     }
 
     private WebTestClient.ResponseSpec create(AuthTestSupport.Account account, Map<String, Object> body) {
