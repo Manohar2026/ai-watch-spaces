@@ -77,6 +77,16 @@ class RoomLaneRegistry {
         lanes.entrySet().removeIf(entry -> entry.getValue().isEvictable(now));
     }
 
+    /** Reconciles every persisted LIVE/HOST_DISCONNECTED room through its serialized lane. */
+    Mono<Integer> recoverRoomsNow() {
+        return db.call(persistence::findRoomsForStartupRecovery)
+                .flatMapMany(Flux::fromIterable)
+                .concatMap(watchSpaceId -> submit(watchSpaceId,
+                                new RecoverWatchSpaceRuntimeMutation(watchSpaceId, persistence))
+                        .map(room -> room.status() == RoomState.Status.HOST_DISCONNECTED ? 1 : 0))
+                .reduce(0, Integer::sum);
+    }
+
     /** Periodically expires due SCHEDULED rooms through their normal serialized mutation lane. */
     @Scheduled(fixedDelayString = "${aiws.watchspace.expiry-scan-delay-ms:60000}")
     void expireUnstartedRooms() {
