@@ -147,3 +147,6 @@ CREATE UNIQUE INDEX ux_room_event_lifecycle_once
     WHERE event_type IN ('ROOM_CREATED', 'ROOM_STARTED', 'ROOM_ENDED');
 CREATE INDEX ix_room_events_type_time
     ON room_events(watch_space_id, event_type, occurred_at);
+
+
+-- -------------------------------------------------------------------------------------
