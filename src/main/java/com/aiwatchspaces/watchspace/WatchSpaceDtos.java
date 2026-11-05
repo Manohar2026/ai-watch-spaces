@@ -32,6 +32,20 @@ public final class WatchSpaceDtos {
     public record JoinByIdRequest(String inviteCode) {
     }
 
+    public record LockWatchSpaceRequest(@NotNull Boolean locked) {
+    }
+
+    public record UpdateRoomSettingsRequest(
+            Boolean triviaEnabled,
+            Boolean votingEnabled,
+            String aiVerbosity,
+            Boolean chatMuted,
+            @Min(2) @Max(50) Integer maxParticipants) {
+    }
+
+    public record RotateInviteCodeResponse(String inviteCode) {
+    }
+
     public record JoinWatchSpaceResponse(
             UUID watchSpaceId,
             UUID membershipId,
