@@ -59,7 +59,57 @@ class RoomLaneTest {
         }
     }
 
+    @Test
+    void readsClockOncePerMutationTruncatesToMicrosAndClampsBackwardsTime() throws Exception {
+        try (DbExecutor executor = DbExecutorTestAccess.create(1, 8)) {
+            UUID watchSpaceId = UUID.randomUUID();
+            Instant firstClockValue = Instant.parse("2026-11-05T12:00:00.000002999Z");
+            Instant earlierClockValue = Instant.parse("2026-11-05T11:59:59.999999999Z");
+            Instant expectedMutationInstant = Instant.parse("2026-11-05T12:00:00.000002Z");
+            SequenceClock clock = new SequenceClock(firstClockValue, earlierClockValue);
+            WatchSpacePersistence persistence = mock(WatchSpacePersistence.class);
+            RoomBroadcaster broadcaster = mock(RoomBroadcaster.class);
+            RoomLane lane = new RoomLane(watchSpaceId, 8, executor, persistence, broadcaster, clock);
+
+            RoomMutation<RoomState> create = new RoomMutation<>() {
+                @Override
+                public RoomMutationCommit<RoomState> apply(RoomState current, Instant mutationInstant) {
+                    assertThat(current).isNull();
+                    assertThat(mutationInstant).isEqualTo(expectedMutationInstant);
+                    RoomState created = snapshot(watchSpaceId, 0L, 0L, mutationInstant);
+                    return new RoomMutationCommit<>(created, created, List.of());
+                }
+
+                @Override
+                public boolean createsRoom() {
+                    return true;
+                }
+            };
+            RoomState created = Mono.<RoomState>create(sink -> lane.enqueue(create, sink))
+                    .block(Duration.ofSeconds(5));
+            assertThat(created).isNotNull();
+            assertThat(created.mutationInstant()).isEqualTo(expectedMutationInstant);
+
+            RoomMutation<Instant> subsequent = (current, mutationInstant) -> {
+                assertThat(current).isSameAs(created);
+                return new RoomMutationCommit<>(current, mutationInstant, List.of());
+            };
+            Instant secondMutationInstant = Mono.<Instant>create(sink -> lane.enqueue(subsequent, sink))
+                    .block(Duration.ofSeconds(5));
+
+            assertThat(secondMutationInstant).isEqualTo(expectedMutationInstant);
+            assertThat(clock.readCount()).isEqualTo(2);
+            verifyNoInteractions(persistence, broadcaster);
+        }
+    }
+
     private static RoomState snapshot(UUID watchSpaceId, long stateVersion, long lastSequenceNo) {
+        return snapshot(watchSpaceId, stateVersion, lastSequenceNo,
+                Instant.parse("2026-11-05T12:00:00Z"));
+    }
+
+    private static RoomState snapshot(
+            UUID watchSpaceId, long stateVersion, long lastSequenceNo, Instant mutationInstant) {
         Instant instant = Instant.parse("2026-11-05T12:00:00Z");
         return new RoomState(
                 watchSpaceId,
@@ -91,8 +141,42 @@ class RoomLaneTest {
                 instant,
                 stateVersion,
                 lastSequenceNo,
-                instant,
+                mutationInstant,
                 List.of(),
                 Map.of());
+    }
+
+    private static final class SequenceClock extends Clock {
+        private final Instant[] instants;
+        private int reads;
+
+        private SequenceClock(Instant... instants) {
+            this.instants = instants.clone();
+        }
+
+        @Override
+        public ZoneOffset getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            if (!ZoneOffset.UTC.equals(zone)) {
+                throw new UnsupportedOperationException("This test clock supports UTC only.");
+            }
+            return this;
+        }
+
+        @Override
+        public synchronized Instant instant() {
+            if (reads >= instants.length) {
+                throw new AssertionError("The room lane read the Clock more than once per mutation.");
+            }
+            return instants[reads++];
+        }
+
+        synchronized int readCount() {
+            return reads;
+        }
     }
 }
