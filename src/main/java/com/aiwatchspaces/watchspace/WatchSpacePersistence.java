@@ -342,10 +342,21 @@ class WatchSpacePersistence {
     @Transactional
     LifecycleResult start(UUID watchSpaceId, UUID actorUserId, Instant mutationInstant) {
         PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireVisibleTo(room, actorUserId);
         if (room.status() == RoomState.Status.ENDED) {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
         }
         requireHost(room, actorUserId);
+        Boolean hostIsMember = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_participants
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :hostUserId AND left_at IS NULL
+                )
+                """, Map.of("watchSpaceId", watchSpaceId, "hostUserId", actorUserId), Boolean.class);
+        if (!Boolean.TRUE.equals(hostIsMember)) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER,
+                    "The host must be an active room member to start it.");
+        }
         if (room.status() != RoomState.Status.SCHEDULED) {
             throw new ApiException(ErrorCode.INVALID_PLAYBACK_TRANSITION,
                     "Only a scheduled room can be started.");
@@ -447,6 +458,7 @@ class WatchSpacePersistence {
     @Transactional
     LifecycleResult end(UUID watchSpaceId, UUID actorUserId, Instant mutationInstant) {
         PersistedLifecycleRoom room = lockLifecycleRoom(watchSpaceId);
+        requireVisibleTo(room, actorUserId);
         if (room.status() == RoomState.Status.ENDED) {
             throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
         }
@@ -515,6 +527,30 @@ class WatchSpacePersistence {
             throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
         }
         return rooms.getFirst();
+    }
+
+    /** Preserve INVITE_ONLY room-existence privacy on lifecycle endpoints. */
+    private void requireVisibleTo(PersistedLifecycleRoom room, UUID actorUserId) {
+        Boolean removed = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_moderation
+                    WHERE watch_space_id = :watchSpaceId
+                      AND user_id = :userId
+                      AND removed_at IS NOT NULL
+                )
+                """, Map.of("watchSpaceId", room.id(), "userId", actorUserId), Boolean.class);
+        if (Boolean.TRUE.equals(removed)) {
+            throw new ApiException(ErrorCode.REMOVED_FROM_ROOM, "You have been removed from this room.");
+        }
+        Boolean hasMembership = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_participants
+                    WHERE watch_space_id = :watchSpaceId AND user_id = :userId
+                )
+                """, Map.of("watchSpaceId", room.id(), "userId", actorUserId), Boolean.class);
+        if (!Boolean.TRUE.equals(hasMembership) && room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Resource not found.");
+        }
     }
 
     private static void requireHost(PersistedLifecycleRoom room, UUID actorUserId) {
