@@ -62,7 +62,7 @@ export function WatchSpacesPage({ onBack }: Props) {
   }, [authorized]);
 
   function handleRequestError(cause: unknown) {
-    if (cause instanceof WatchSpaceApiError && cause.code === 'REMOVED_FROM_ROOM') {
+    if ((cause instanceof WatchSpaceApiError || cause instanceof ApiError) && cause.code === 'REMOVED_FROM_ROOM') {
       // A removed member must not keep seeing room details from an earlier successful read.
       setRoom(null);
       setParticipants([]);
