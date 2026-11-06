@@ -1,6 +1,7 @@
 package com.aiwatchspaces.realtime;
 
 import java.time.Clock;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -96,7 +97,7 @@ final class WatchSpaceWebSocketHandler implements WebSocketHandler {
             return session.close(UNSUPPORTED_FRAME);
         }
         String payload = message.getPayloadAsText();
-        if (payload.length() > MAX_INBOUND_CHARS) {
+        if (payload.getBytes(StandardCharsets.UTF_8).length > MAX_INBOUND_CHARS) {
             return session.close(TOO_LARGE);
         }
         // Playback, chat, sync and token-renewal commands are introduced in their own M5+ slices.
