@@ -132,7 +132,7 @@ The backend remains authoritative for permissions, room state, playback sequenci
 - The current M2 refresh endpoint accepts a refresh token in its request body. The browser integration must respect that contract until a separately reviewed security decision changes it.
 - Do not put access tokens or refresh tokens in source code, build-time public configuration, URLs, logs, or analytics events.
 - Avoid persistent browser storage for credentials by default. Before implementing session persistence, document and test the selected refresh-token handling and XSS/CSRF threat model; do not silently put refresh tokens in localStorage.
-- WebSocket authentication and browser-compatible credential transport must be confirmed against the backend design before the realtime UI is implemented. Do not assume browser WebSocket APIs can set arbitrary Authorization headers.
+- Browser WebSocket authentication uses a short-lived, single-use room-bound ticket minted by an authenticated REST request and passed as a temporary `Sec-WebSocket-Protocol` value. The server selects only the public `aiws.v1` subprotocol; access tokens are never placed in query strings, URLs, or persistent browser storage. Non-browser clients may use the documented Bearer handshake header.
 - Configure explicit development and production CORS/origin allowlists. Never use wildcard origins with credentials.
 - Map backend error envelopes into consistent user-facing states while retaining correlation IDs for debugging.
 
