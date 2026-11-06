@@ -21,7 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.socket.WebSocketHttpHeaders;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
 import reactor.core.publisher.Mono;
@@ -123,8 +123,8 @@ class WatchSpaceWebSocketHandshakeIT {
     private void connect(UUID roomId, String ticket, List<String> frames,
                          AtomicReference<String> selectedProtocol) {
         URI uri = URI.create("ws://localhost:" + port + "/ws/watch-spaces/" + roomId);
-        WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
-        headers.setSecWebSocketProtocol(List.of(
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Sec-WebSocket-Protocol", String.join(", ",
                 WebSocketTicketHandshakeAuthenticator.SELECTED_PROTOCOL,
                 WebSocketTicketHandshakeAuthenticator.TICKET_PROTOCOL_PREFIX + ticket));
 
