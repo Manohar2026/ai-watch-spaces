@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
-import { watchSpaceApi, WatchSpaceApiError, type CreateRoomRequest, type RoomDetails, type RoomParticipant, type RoomPreview, type RoomView } from './api';
+import { watchSpaceApi, WatchSpaceApiError, type CreateRoomRequest, type RoomDetails, type RoomParticipant, type RoomPreview, type RoomSettings, type RoomView } from './api';
 
 interface Props { onBack(): void }
 type Screen = 'overview' | 'room';
@@ -38,6 +38,7 @@ export function WatchSpacesPage({ onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({titleId: '', name: '', privacy: 'INVITE_ONLY' as CreateRoomRequest['privacy'], maxParticipants: 25});
+  const [settingsForm, setSettingsForm] = useState<RoomSettings | null>(null);
 
   const authorized = useCallback(async <T,>(operation: (token: string) => Promise<T>): Promise<T> => {
     let token = getAccessToken();
@@ -80,7 +81,17 @@ export function WatchSpacesPage({ onBack }: Props) {
         watchSpaceApi.get(token, id),
         watchSpaceApi.participants(token, id).catch(() => [] as RoomParticipant[]),
       ]));
-      setRoom(nextRoom); setParticipants(people); setRoomId(id); setScreen('room');
+      setRoom(nextRoom);
+      setParticipants(people);
+      setSettingsForm('watchSpaceId' in nextRoom ? {
+        maxParticipants: nextRoom.maxParticipants,
+        aiVerbosity: nextRoom.aiVerbosity,
+        triviaEnabled: nextRoom.triviaEnabled,
+        votingEnabled: nextRoom.votingEnabled,
+        chatMuted: nextRoom.chatMuted,
+      } : null);
+      setRoomId(id);
+      setScreen('room');
     } catch (cause) { handleRequestError(cause); }
     finally { setIsLoading(false); }
   }, [authorized]);
@@ -116,6 +127,28 @@ export function WatchSpacesPage({ onBack }: Props) {
       await authorized(action);
       setNotice(success);
       if (roomId) await loadRoom(roomId);
+    } catch (cause) { handleRequestError(cause); }
+    finally { setIsSaving(false); }
+  }
+
+  async function submitSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isDetails(room) || !settingsForm) return;
+    const currentRoom = room;
+    setIsSaving(true); setError(null); setNotice(null);
+    try {
+      const updated = await authorized((token) =>
+        watchSpaceApi.updateSettings(token, currentRoom.watchSpaceId, settingsForm)
+      );
+      setRoom(updated);
+      setSettingsForm({
+        maxParticipants: updated.maxParticipants,
+        aiVerbosity: updated.aiVerbosity,
+        triviaEnabled: updated.triviaEnabled,
+        votingEnabled: updated.votingEnabled,
+        chatMuted: updated.chatMuted,
+      });
+      setNotice('Room settings updated.');
     } catch (cause) { handleRequestError(cause); }
     finally { setIsSaving(false); }
   }
@@ -175,6 +208,30 @@ export function WatchSpacesPage({ onBack }: Props) {
                 <div className="watchspace-stat-grid"><div><small>STATUS</small><strong>{room.status}</strong></div><div><small>MEMBERS</small><strong>{isDetails(room) ? room.activeMembershipCount : room.participantCount} / {room.maxParticipants}</strong></div><div><small>ACCESS</small><strong>{room.locked ? 'LOCKED' : 'OPEN'}</strong></div><div><small>ROLE</small><strong>{isDetails(room) ? room.myRoomRole : 'VISITOR'}</strong></div></div>
                 {isDetails(room) && <div className="watchspace-metadata"><div><small>ROOM ID</small><code>{room.watchSpaceId}</code></div><div><small>CREATED</small><span>{timestamp(room.createdAt)}</span></div><div><small>SCHEDULED</small><span>{timestamp(room.scheduledAt)}</span></div><div><small>PLAYBACK</small><span>{room.playbackState} · {Math.floor(room.lastPlaybackPositionMs / 1000)}s</span></div></div>}
                 {isDetails(room) && <div className="watchspace-participants"><div className="watchspace-subheading"><h3>Participants</h3><span>{participants.length} active memberships</span></div>{participants.length ? <div className="watchspace-participant-list">{participants.map((participant) => <div className="watchspace-participant" key={participant.userId}><span className="watchspace-avatar">{participant.displayName.slice(0,1).toUpperCase()}</span><div><strong>{participant.displayName}{participant.userId === user?.id ? ' (you)' : ''}</strong><small>{participant.roomRole} · {participant.connected ? participant.connectionQuality : 'Offline until M5'}</small></div><span className={participant.muted ? 'watchspace-muted' : 'watchspace-unmuted'}>{participant.muted ? 'MUTED' : 'CAN CHAT'}</span>{host && participant.userId !== room.hostUserId && <div className="watchspace-moderation"><button type="button" disabled={isSaving} onClick={() => void runAction((token) => watchSpaceApi.muteParticipant(token, room.watchSpaceId, participant.userId, !participant.muted), participant.muted ? 'Participant unmuted.' : 'Participant muted.')}>{participant.muted ? 'Unmute' : 'Mute'}</button><button type="button" disabled={isSaving} onClick={() => {if(window.confirm(`Remove ${participant.displayName} from this room?`)) void runAction((token) => watchSpaceApi.removeParticipant(token, room.watchSpaceId, participant.userId), 'Participant removed.');}}>Remove</button></div>}</div>)}</div> : <p className="watchspace-empty">No participant records are available.</p>}</div>}
+                {host && isDetails(room) && !isRoomEnded && settingsForm && (
+                  <section className="watchspace-settings-panel">
+                    <div className="watchspace-subheading"><h3>Room settings</h3><span>HOST CONTROLS</span></div>
+                    <form className="watchspace-settings-form" onSubmit={(event) => void submitSettings(event)}>
+                      <label>Maximum participants
+                        <input type="number" min={Math.max(2, room.activeMembershipCount)} max={50} required value={settingsForm.maxParticipants}
+                          onChange={(event) => setSettingsForm((current) => current ? {...current, maxParticipants: Number(event.target.value)} : current)} />
+                        <small>Between {Math.max(2, room.activeMembershipCount)} and 50, including current members.</small>
+                      </label>
+                      <label>AI verbosity
+                        <select value={settingsForm.aiVerbosity} onChange={(event) => setSettingsForm((current) => current ? {...current, aiVerbosity: event.target.value as RoomSettings['aiVerbosity']} : current)}>
+                          <option value="MINIMAL">Minimal</option><option value="NORMAL">Normal</option><option value="CHATTY">Chatty</option>
+                        </select>
+                      </label>
+                      <div className="watchspace-settings-toggles">
+                        <label><input type="checkbox" checked={settingsForm.triviaEnabled} onChange={(event) => setSettingsForm((current) => current ? {...current, triviaEnabled: event.target.checked} : current)} /> Trivia enabled</label>
+                        <label><input type="checkbox" checked={settingsForm.votingEnabled} onChange={(event) => setSettingsForm((current) => current ? {...current, votingEnabled: event.target.checked} : current)} /> Voting enabled</label>
+                        <label><input type="checkbox" checked={settingsForm.chatMuted} onChange={(event) => setSettingsForm((current) => current ? {...current, chatMuted: event.target.checked} : current)} /> Chat muted</label>
+                      </div>
+                      <p className="watchspace-settings-note">These settings are persisted by M4. Chat enforcement and vote lifecycle side effects are not yet part of the M4 realtime scope.</p>
+                      <button className="primary-button watchspace-settings-submit" type="submit" disabled={isSaving}>Save settings <span>→</span></button>
+                    </form>
+                  </section>
+                )}
                 {!isDetails(room) && <div className="watchspace-preview-note">This is a public preview. Join the room to see its members and full details.</div>}
                 {isDetails(room) && <div className="watchspace-controls">{host && <><button type="button" disabled={isSaving || isRoomEnded} onClick={() => void runAction((token) => watchSpaceApi.setLocked(token, room.watchSpaceId, !room.locked), room.locked ? 'Room unlocked.' : 'Room locked.')}>{room.locked ? 'Unlock room' : 'Lock room'}</button><button type="button" disabled={isSaving || room.status !== 'SCHEDULED'} onClick={() => void runAction((token) => watchSpaceApi.start(token, room.watchSpaceId), 'Room started. Playback is paused until M5 playback controls.')}>Start room</button><button type="button" disabled={isSaving || isRoomEnded} onClick={() => void runAction((token) => watchSpaceApi.rotateInviteCode(token, room.watchSpaceId).then((result) => {setInviteCode(result.inviteCode); return result;}), 'Invite code rotated. The previous code no longer works.')}>Rotate invite code</button><button className="danger" type="button" disabled={isSaving || isRoomEnded} onClick={() => {if(window.confirm('End this Watch Space for all members? This cannot be undone.')) void runAction((token) => watchSpaceApi.end(token, room.watchSpaceId), 'Watch Space ended.');}}>End room</button></>}{!host && !isRoomEnded && <button className="danger" type="button" disabled={isSaving} onClick={() => {if(window.confirm('Leave this Watch Space?')) void runAction((token) => watchSpaceApi.leave(token, room.watchSpaceId), 'You left the Watch Space.');}}>Leave room</button>}</div>}
               </>
