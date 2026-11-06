@@ -239,6 +239,44 @@ class WatchSpaceApplicationService {
         });
     }
 
+    @Override
+    public Mono<WatchSpaceRealtimeSnapshot> snapshot(UUID watchSpaceId, UUID userId) {
+        return lanes.snapshot(watchSpaceId).map(room -> {
+            requireMember(room, userId);
+            if (room.status() == RoomState.Status.ENDED) {
+                throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
+            }
+            List<WatchSpaceRealtimeSnapshot.Participant> participants = room.participants().stream()
+                    .filter(participant -> participant.leftAt() == null)
+                    .map(participant -> {
+                        RoomState.Moderation moderation = room.moderation().get(participant.userId());
+                        boolean muted = moderation != null && moderation.muted();
+                        return new WatchSpaceRealtimeSnapshot.Participant(
+                                participant.userId(), participant.displayName(),
+                                participant.userId().equals(room.hostUserId()) ? "HOST" : "VIEWER", muted);
+                    })
+                    .toList();
+            return new WatchSpaceRealtimeSnapshot(
+                    room.watchSpaceId(), room.name(), room.titleName(), room.titleDurationMs(),
+                    room.status(), room.hostUserId(), room.sessionCorrelationId(), room.playbackState(),
+                    room.lastPlaybackPositionMs(), room.playbackUpdatedAt(), room.stateVersion(),
+                    room.lastSequenceNo(),
+                    new WatchSpaceRealtimeSnapshot.Settings(room.maxParticipants(), room.aiVerbosity(),
+                            room.triviaEnabled(), room.votingEnabled(), room.chatMuted(), room.locked()),
+                    participants, userId);
+        });
+    }
+
+    @Override
+    public void sessionOpened(UUID watchSpaceId) {
+        lanes.sessionOpened(watchSpaceId);
+    }
+
+    @Override
+    public void sessionClosed(UUID watchSpaceId) {
+        lanes.sessionClosed(watchSpaceId);
+    }
+
     private static boolean hasMembership(RoomState room, UUID userId) {
         return room.participants().stream().anyMatch(participant -> participant.userId().equals(userId));
     }
