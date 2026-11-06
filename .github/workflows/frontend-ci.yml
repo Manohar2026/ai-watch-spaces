@@ -2,12 +2,12 @@ name: Frontend CI
 
 on:
   pull_request:
-    branches: [main, feature/m4-watchspace-lifecycle, feature/m3-catalog-timeline]
+    branches: [main, feature/m4-watchspace-lifecycle, feature/m5-realtime-foundation, feature/m3-catalog-timeline]
     paths:
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
   push:
-    branches: [feature/full-stack-architecture, feature/catalog-ui, feature/m4-watchspace-lifecycle]
+    branches: [feature/full-stack-architecture, feature/catalog-ui, feature/m4-watchspace-lifecycle, feature/m5-realtime-foundation]
     paths:
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
