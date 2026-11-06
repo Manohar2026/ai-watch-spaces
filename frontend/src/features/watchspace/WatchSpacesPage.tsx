@@ -135,10 +135,11 @@ export function WatchSpacesPage({ onBack }: Props) {
     event.preventDefault();
     if (!isDetails(room) || !settingsForm) return;
     const currentRoom = room;
+    const nextSettings = settingsForm;
     setIsSaving(true); setError(null); setNotice(null);
     try {
       const updated = await authorized((token) =>
-        watchSpaceApi.updateSettings(token, currentRoom.watchSpaceId, settingsForm)
+        watchSpaceApi.updateSettings(token, currentRoom.watchSpaceId, nextSettings)
       );
       setRoom(updated);
       setSettingsForm({
