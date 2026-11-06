@@ -2,6 +2,7 @@ package com.aiwatchspaces.auth;
 
 import com.aiwatchspaces.common.error.ErrorCode;
 import com.aiwatchspaces.common.error.ErrorResponseWriter;
+import com.aiwatchspaces.common.security.WebSocketHandshakeAuthenticator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -36,7 +37,8 @@ class SecurityConfig {
 
     @Bean
     SecurityWebFilterChain apiSecurity(ServerHttpSecurity http, ErrorResponseWriter errors, ReactiveJwtDecoder jwtDecoder,
-                                       JwtAuthentications jwtAuthentications) {
+                                       JwtAuthentications jwtAuthentications,
+                                       WebSocketHandshakeAuthenticator webSocketAuthenticator) {
         ServerAuthenticationEntryPoint entryPoint = (exchange, e) -> {
             exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
             ErrorCode code = BearerTokenFailures.classify(e);
@@ -45,8 +47,14 @@ class SecurityConfig {
         };
         ServerWebExchangeMatcher publicAuthPaths = ServerWebExchangeMatchers.pathMatchers(HttpMethod.POST, PUBLIC_AUTH_PATHS);
         ServerBearerTokenAuthenticationConverter bearerTokens = new ServerBearerTokenAuthenticationConverter();
-        ServerAuthenticationConverter bearerTokensOutsidePublicAuth = exchange -> publicAuthPaths.matches(exchange)
-                .flatMap(match -> match.isMatch() ? Mono.empty() : bearerTokens.convert(exchange));
+        ServerAuthenticationConverter bearerTokensOutsidePublicAuth = exchange -> {
+            String path = exchange.getRequest().getPath().pathWithinApplication().value();
+            if (path.startsWith("/ws/watch-spaces/")) {
+                return webSocketAuthenticator.authenticate(exchange);
+            }
+            return publicAuthPaths.matches(exchange)
+                    .flatMap(match -> match.isMatch() ? Mono.empty() : bearerTokens.convert(exchange));
+        };
         ServerAccessDeniedHandler accessDenied = (exchange, e) ->
                 errors.write(exchange, ErrorCode.FORBIDDEN, "Access denied.");
         return http
