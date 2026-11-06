@@ -17,6 +17,7 @@ import com.aiwatchspaces.common.error.ApiException;
 import com.aiwatchspaces.common.error.ErrorCode;
 import com.aiwatchspaces.common.security.AuthenticatedUser;
 import org.springframework.stereotype.Component;
+import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * Short-lived, single-use browser WebSocket credentials. Only SHA-256 digests are retained in
@@ -82,6 +83,17 @@ final class WebSocketTicketService {
 
     int outstandingTicketCount() {
         return tickets.size();
+    }
+
+    @Scheduled(fixedDelay = 30_000L)
+    void purgeExpiredTickets() {
+        purgeExpired(Instant.now(clock));
+    }
+
+    int purgeExpiredTicketsNow() {
+        int before = tickets.size();
+        purgeExpired(Instant.now(clock));
+        return before - tickets.size();
     }
 
     private void purgeExpired(Instant now) {
