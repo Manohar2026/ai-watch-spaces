@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -56,8 +57,9 @@ class SecurityConfig {
 
         // The normal resource-server filter authenticates REST Bearer JWTs. Browser WebSockets
         // use a dedicated one-time-ticket filter because the browser API cannot set Authorization.
+        ReactiveAuthenticationManager ticketAuthenticationManager = authentication -> Mono.just(authentication);
         AuthenticationWebFilter webSocketTicketFilter =
-                new AuthenticationWebFilter(authentication -> Mono.just(authentication));
+                new AuthenticationWebFilter(ticketAuthenticationManager);
         webSocketTicketFilter.setRequiresAuthenticationMatcher(
                 ServerWebExchangeMatchers.pathMatchers("/ws/watch-spaces/**"));
         webSocketTicketFilter.setServerAuthenticationConverter(webSocketAuthenticator::authenticate);
