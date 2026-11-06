@@ -1,6 +1,6 @@
 # AI Watch Spaces — Backend System Design
 
-**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 implemented and merged into `main` on 2026-11-04. M4 explicitly authorized by the user on 2026-11-05 and is in implementation; M5 and later still require separate explicit authorization.**
+**Status:** Design baseline **v0.4 — approved by the user on 2026-10-26** (M0.2 documentation correction). **M1 implemented on 2026-10-26** (scaffold and infrastructure only; results in `docs/dependency-versions.md`; M1 corrections in Appendix D). **M2 implemented on 2026-10-26** (Flyway V1 and authentication; results in `docs/m2-verification.md`; decisions in Appendix E). **M3 implemented and merged into `main` on 2026-11-04. M4 explicitly authorized by the user on 2026-11-05 and implemented on `feature/m4-watchspace-lifecycle`. M5 explicitly authorized by the user on 2026-11-06 and is in implementation on `feature/m5-realtime-foundation`; M6 and later still require separate explicit authorization.**
 
 **Source of truth:** *AI-Driven Hyper-Personalized Interactive Content & Social Watch Spaces PRD* v1.0 (September 2026). This design implements **Track B: Backend-Only** on the PRD's **Option A — Java** stack.
 
@@ -887,8 +887,9 @@ Path `{userId}` parameters identify the **target** of a moderation action; the a
 
 ### 7.1 Connection and authentication
 
-- `GET /ws/watch-spaces/{watchSpaceId}` with `Authorization: Bearer <accessToken>` on the handshake. Tokens in query strings are rejected.
-- The handshake requires a valid token **and** an active membership (REST join first); otherwise the upgrade is refused with 401/403/404.
+- `GET /ws/watch-spaces/{watchSpaceId}`. Non-browser clients may send `Authorization: Bearer <accessToken>` on the handshake. Tokens in query strings are always rejected.
+- **Browser credential transport:** browser WebSocket APIs cannot set an arbitrary `Authorization` header. A browser first calls authenticated `POST /api/v1/watch-spaces/{watchSpaceId}/connection-ticket`. The server issues a cryptographically random, room-bound, single-use ticket with a 30-second maximum lifetime (never later than the access-token expiry). The browser offers `aiws.v1` and `aiws.ticket.<ticket>` as subprotocols. The server consumes the ticket during handshake authentication and selects only `aiws.v1`; the ticket is never selected, echoed, placed in a URL, or persisted in browser storage. Only a digest is held in process memory.
+- The handshake requires a valid credential **and** an active membership (REST join first); otherwise the upgrade is refused with 401/403/404. Ticket issuance and handshake consumption both re-check room membership/removal.
 - One socket per user per room: a new connection replaces the old one, which is closed with 4409.
 - After upgrade the server sends `room.snapshot` and then `room.chat.history`.
 - **Token renewal (I16):**
