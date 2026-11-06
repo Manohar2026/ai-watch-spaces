@@ -19,7 +19,7 @@ A native/scripted client may use the Bearer authorization header described by th
 ## Implemented in the first vertical slice
 
 - A dedicated security filter authenticates `/ws/watch-spaces/**` with the one-time ticket. The normal REST resource-server filter remains responsible for Bearer JWTs.
-- Ticket issuance validates the current room membership; ticket consumption is one-time, room-bound and expiry-bound. Membership is rechecked during handshake authentication.
+- Ticket issuance validates the current active room membership; ticket consumption is one-time, room-bound and expiry-bound. Membership is rechecked during handshake authentication.
 - `GET /ws/watch-spaces/{watchSpaceId}` is mapped through WebFlux.
 - The connection sends `room.snapshot` followed by `room.chat.history` (currently empty until the chat milestone is implemented).
 - The snapshot includes room lifecycle/settings, playback's persisted starting snapshot, sequence/state version, members, this user's role/mute state, connected flags, and access-token expiry.
