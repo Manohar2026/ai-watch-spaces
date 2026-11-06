@@ -96,6 +96,11 @@ export interface RotateInviteCodeResponse {
   inviteCode: string;
 }
 
+export interface WebSocketTicketResponse {
+  ticket: string;
+  expiresAt: string;
+}
+
 interface ErrorEnvelope {
   code?: string;
   message?: string;
@@ -161,6 +166,8 @@ export const watchSpaceApi = {
     `/watch-spaces/${encodeURIComponent(roomId)}/lock`, token, 'POST', {locked}),
   updateSettings: (token: string, roomId: string, patch: Partial<RoomSettings>) => mutate<RoomDetails>(
     `/watch-spaces/${encodeURIComponent(roomId)}/settings`, token, 'PATCH', patch),
+  connectionTicket: (token: string, roomId: string) => mutate<WebSocketTicketResponse>(
+    `/watch-spaces/${encodeURIComponent(roomId)}/connection-ticket`, token, 'POST'),
   rotateInviteCode: (token: string, roomId: string) => mutate<RotateInviteCodeResponse>(
     `/watch-spaces/${encodeURIComponent(roomId)}/invite-code`, token, 'POST'),
   muteParticipant: (token: string, roomId: string, userId: string, muted: boolean) => mutate<RoomDetails>(
