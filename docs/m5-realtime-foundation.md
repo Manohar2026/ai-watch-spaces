@@ -12,7 +12,7 @@ Browser WebSocket APIs cannot set an arbitrary `Authorization` header. Browser c
 
 `POST /api/v1/watch-spaces/{watchSpaceId}/connection-ticket`
 
-The caller must be an active, non-removed member of the room. A ticket is 32 random bytes encoded with Base64 URL encoding, bound to one user and one room, single-use, and expires within 30 seconds or at the access-token expiry (whichever is earlier). Only its SHA-256 digest is retained in process memory. The browser offers `aiws.v1` and `aiws.ticket.<ticket>` as WebSocket subprotocols; the server selects only `aiws.v1`. Access and refresh tokens are never placed in a query string or URL.
+The caller must be an active, non-removed member of the room; historical membership after leaving does not qualify. Ticket minting is rate-limited to 20 per user per minute by default. A ticket is 32 random bytes encoded with Base64 URL encoding, bound to one user and one room, single-use, and expires within 30 seconds or at the access-token expiry (whichever is earlier). Only its SHA-256 digest is retained in process memory, and expired entries are purged every 30 seconds. The browser offers `aiws.v1` and `aiws.ticket.<ticket>` as WebSocket subprotocols; the server selects only `aiws.v1`. Access and refresh tokens are never placed in a query string or URL.
 
 A native/scripted client may use the Bearer authorization header described by the base WebSocket contract. The browser ticket path is the selected browser-compatible transport.
 
@@ -48,6 +48,6 @@ The full backend GitHub Actions workflow is the compile/test gate. Browser/manua
 4. Add access-token renewal messages, `room.auth.expiring`, same-subject validation, and 4401 expiry close.
 5. Enforce terminal close codes for room end/removal (4410/4411) and active membership revalidation.
 6. Add the complete scripted JUnit WebSocket integration suite: invalid ticket, non-member, one-time ticket replay, snapshot ordering, replacement 4409, reconnect without duplicate membership, auth expiry/renewal, 4401/4409/4411.
-7. Integrate the browser-side WebSocket client and Vite `/ws` proxy, then manually verify with the two local browser accounts.
+7. Manually verify the current browser-side ticket and WebSocket client with the two local accounts, then refine connection-state handling based on observed behavior.
 
 Playback mutations, clock synchronization/drift, chat persistence and chat enforcement belong to later milestones and must not be silently added to this slice.
