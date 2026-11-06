@@ -60,6 +60,10 @@ The migration does not add any new table or column beyond the approved V3 target
 
 Schema parity verifies the migration shape only. The room-creation, mutation-lane, membership, capacity, invite-code, lifecycle, recovery and expiry behaviors are covered separately by the integration tests listed above. A green CI run is automated verification; it does not substitute for manual request/response verification against a running development instance.
 
+## Manual API verification
+
+A repeatable Postman collection or scripted HTTP verification should exercise the REST contract in `docs/m4-watchspace-api.md` using at least two registered users. The browser F4 client is a convenience for demonstrating the current REST lifecycle; it does not replace automated integration tests or validate WebSocket behavior, which belongs to M5.
+
 ## Remaining M4 implementation
 
 1. Host transfer requires an active, currently connected target; finish it with the M5 connected-session registry. Removed-user socket closure (4411) and chat enforcement of `CHAT_MUTED` also wait for M5 adapters.
