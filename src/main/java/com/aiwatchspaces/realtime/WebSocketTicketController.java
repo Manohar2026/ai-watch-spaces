@@ -3,6 +3,9 @@ package com.aiwatchspaces.realtime;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.aiwatchspaces.common.error.ApiException;
+import com.aiwatchspaces.common.error.ErrorCode;
+import com.aiwatchspaces.common.ratelimit.RateLimiter;
 import com.aiwatchspaces.common.security.AuthenticatedUser;
 import com.aiwatchspaces.watchspace.WatchSpaceRealtimePort;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,10 +21,15 @@ class WebSocketTicketController {
 
     private final WatchSpaceRealtimePort rooms;
     private final WebSocketTicketService tickets;
+    private final RateLimiter rateLimiter;
+    private final WebSocketTicketRateLimitProperties limits;
 
-    WebSocketTicketController(WatchSpaceRealtimePort rooms, WebSocketTicketService tickets) {
+    WebSocketTicketController(WatchSpaceRealtimePort rooms, WebSocketTicketService tickets,
+                              RateLimiter rateLimiter, WebSocketTicketRateLimitProperties limits) {
         this.rooms = rooms;
         this.tickets = tickets;
+        this.rateLimiter = rateLimiter;
+        this.limits = limits;
     }
 
     @PostMapping("/{watchSpaceId}/connection-ticket")
@@ -29,6 +37,12 @@ class WebSocketTicketController {
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
         return rooms.snapshot(watchSpaceId, caller.userId())
                 .map(ignored -> {
+                    RateLimiter.Decision decision = rateLimiter.tryAcquire(
+                            "realtime:ticket:user:" + caller.userId(),
+                            limits.perUserLimit(), limits.window());
+                    if (!decision.allowed()) {
+                        throw ApiException.rateLimited(decision.retryAfterSeconds());
+                    }
                     WebSocketTicketService.IssuedWebSocketTicket ticket = tickets.issue(caller, watchSpaceId);
                     return new WebSocketTicketResponse(ticket.value(), ticket.expiresAt());
                 });
