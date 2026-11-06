@@ -18,7 +18,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 
 ## Current implementation status
 
-- **Backend M4 (in progress):** Flyway V3, the serialized room mutation lane, invite-code hashing/rotation, room creation, privacy-aware reads, participant listing, both join routes, quick-rejoin, transaction-guarded capacity, leave/start/end, lock/unlock, partial room settings, and persistent mute/removal are implemented on `feature/m4-watchspace-lifecycle`. PostgreSQL Testcontainers CI passes all 89 tests. Host transfer and realtime socket effects remain dependent on M5.
+- **Backend M4 (in progress):** Flyway V3, the serialized room mutation lane, invite-code hashing/rotation, room creation, privacy-aware reads, participant listing, both join routes, quick-rejoin, transaction-guarded capacity, leave/start/end, lock/unlock, partial room settings, persistent mute/removal, startup recovery, scheduled-room expiry and graceful shutdown are implemented on `feature/m4-watchspace-lifecycle`. The last verified green backend run before the current F4 commits passed on commit `8618a58`; CI for the latest combined branch changes is still being checked. Host transfer and realtime socket effects remain dependent on M5.
 
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).
@@ -27,7 +27,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
 - **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; browser verification against a local backend is pending.
 - **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
-- **Frontend F4 (in progress):** Watch Space REST lifecycle screen is being added on `feature/m4-watchspace-lifecycle`; it will cover create/join, room details, participants, lock/unlock, leave, end and host moderation using the M4 API. WebSocket playback/chat/presence remain M5.
+- **Frontend F4 (in progress):** a Watch Space REST lifecycle screen is implemented on `feature/m4-watchspace-lifecycle`: create rooms, join by invite code or room ID, view room details and participants, lock/unlock, start/end, rotate invite codes, leave, and host mute/remove moderation. The typed API client uses the M4 REST contract. Frontend CI passes TypeScript checking and the production build; local browser/API verification is still pending. WebSocket playback/chat/presence remain M5.
 
 Backend verification results are recorded in [docs/m2-verification.md](docs/m2-verification.md). Those are repository-recorded results; run the commands below to verify the current checkout yourself.
 
