@@ -142,7 +142,7 @@ async function mutate<T>(path: string, token: string, method: string, body?: unk
 
 export const watchSpaceApi = {
   listTitles: (token: string) => authenticatedGet<{items: Array<{id: string; name: string}>}>(
-    '/titles?page=0&size=100', token),
+    '/titles?page=0&size=50', token),
   create: (token: string, body: CreateRoomRequest) => mutate<CreateRoomResponse>('/watch-spaces', token, 'POST', body),
   joinByCode: (token: string, inviteCode: string) => mutate<JoinRoomResponse>('/watch-spaces/join', token, 'POST', {inviteCode}),
   joinById: (token: string, roomId: string, inviteCode?: string) => mutate<JoinRoomResponse>(
