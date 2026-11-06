@@ -125,10 +125,21 @@ export function WatchSpacesPage({ onBack }: Props) {
           try {
             const envelope = JSON.parse(event.data) as {
               event?: string;
-              payload?: {participants?: RoomParticipant[]};
+              payload?: {
+                participants?: RoomParticipant[];
+                userId?: string;
+                connected?: boolean;
+              };
             };
             if (envelope.event === 'room.snapshot' && Array.isArray(envelope.payload?.participants)) {
               setParticipants(envelope.payload.participants);
+            } else if (envelope.event === 'room.presence'
+              && typeof envelope.payload?.userId === 'string'
+              && typeof envelope.payload.connected === 'boolean') {
+              const {userId, connected} = envelope.payload;
+              setParticipants((current) => current.map((participant) =>
+                participant.userId === userId ? {...participant, connected} : participant
+              ));
             }
           } catch {
             // Ignore unrecognized frames; the realtime protocol owns its validation.
@@ -266,10 +277,10 @@ export function WatchSpacesPage({ onBack }: Props) {
                 <div className="watchspace-stat-grid"><div><small>STATUS</small><strong>{room.status}</strong></div><div><small>MEMBERS</small><strong>{isDetails(room) ? room.activeMembershipCount : room.participantCount} / {room.maxParticipants}</strong></div><div><small>ACCESS</small><strong>{room.locked ? 'LOCKED' : 'OPEN'}</strong></div><div><small>ROLE</small><strong>{isDetails(room) ? room.myRoomRole : 'VISITOR'}</strong></div></div>
                 {isDetails(room) && <div className={`watchspace-realtime-status ${realtimeStatus.toLowerCase()}`} role="status">
                   <div><small>WEBSOCKET CONNECTION</small><strong>{realtimeStatus}</strong></div>
-                  <p>Authenticated connection and initial room snapshot. Live presence broadcasts and playback sync are the next M5 steps.</p>
+                  <p>Authenticated connection, initial room snapshot and live participant presence. Playback synchronization is a later M5 step.</p>
                 </div>}
                 {isDetails(room) && <div className="watchspace-metadata"><div><small>ROOM ID</small><code>{room.watchSpaceId}</code></div><div><small>CREATED</small><span>{timestamp(room.createdAt)}</span></div><div><small>SCHEDULED</small><span>{timestamp(room.scheduledAt)}</span></div><div><small>PLAYBACK</small><span>{room.playbackState} · {Math.floor(room.lastPlaybackPositionMs / 1000)}s</span></div></div>}
-                {isDetails(room) && <div className="watchspace-participants"><div className="watchspace-subheading"><h3>Participants</h3><span>{participants.length} active memberships</span></div>{participants.length ? <div className="watchspace-participant-list">{participants.map((participant) => <div className="watchspace-participant" key={participant.userId}><span className="watchspace-avatar">{participant.displayName.slice(0,1).toUpperCase()}</span><div><strong>{participant.displayName}{participant.userId === user?.id ? ' (you)' : ''}</strong><small>{participant.roomRole} · {participant.connected ? `Connected · ${participant.connectionQuality}` : 'Offline'}</small></div><span className={participant.muted ? 'watchspace-muted' : 'watchspace-unmuted'}>{participant.muted ? 'MUTED' : 'CAN CHAT'}</span>{host && participant.userId !== room.hostUserId && <div className="watchspace-moderation"><button type="button" disabled={isSaving} onClick={() => void runAction((token) => watchSpaceApi.muteParticipant(token, room.watchSpaceId, participant.userId, !participant.muted), participant.muted ? 'Participant unmuted.' : 'Participant muted.')}>{participant.muted ? 'Unmute' : 'Mute'}</button><button type="button" disabled={isSaving} onClick={() => {if(window.confirm(`Remove ${participant.displayName} from this room?`)) void runAction((token) => watchSpaceApi.removeParticipant(token, room.watchSpaceId, participant.userId), 'Participant removed.');}}>Remove</button></div>}</div>)}</div> : <p className="watchspace-empty">No participant records are available.</p>}</div>}
+                {isDetails(room) && <div className="watchspace-participants"><div className="watchspace-subheading"><h3>Participants</h3><span>{participants.filter((participant) => participant.connected).length} connected · {participants.length} active memberships</span></div>{participants.length ? <div className="watchspace-participant-list">{participants.map((participant) => <div className="watchspace-participant" key={participant.userId}><span className="watchspace-avatar">{participant.displayName.slice(0,1).toUpperCase()}</span><div><strong>{participant.displayName}{participant.userId === user?.id ? ' (you)' : ''}</strong><small>{participant.roomRole} · {participant.connected ? `Connected · ${participant.connectionQuality}` : 'Offline'}</small></div><span className={participant.muted ? 'watchspace-muted' : 'watchspace-unmuted'}>{participant.muted ? 'MUTED' : 'CAN CHAT'}</span>{host && participant.userId !== room.hostUserId && <div className="watchspace-moderation"><button type="button" disabled={isSaving} onClick={() => void runAction((token) => watchSpaceApi.muteParticipant(token, room.watchSpaceId, participant.userId, !participant.muted), participant.muted ? 'Participant unmuted.' : 'Participant muted.')}>{participant.muted ? 'Unmute' : 'Mute'}</button><button type="button" disabled={isSaving} onClick={() => {if(window.confirm(`Remove ${participant.displayName} from this room?`)) void runAction((token) => watchSpaceApi.removeParticipant(token, room.watchSpaceId, participant.userId), 'Participant removed.');}}>Remove</button></div>}</div>)}</div> : <p className="watchspace-empty">No participant records are available.</p>}</div>}
                 {host && isDetails(room) && !isRoomEnded && settingsForm && (
                   <section className="watchspace-settings-panel">
                     <div className="watchspace-subheading"><h3>Room settings</h3><span>HOST CONTROLS</span></div>
@@ -300,7 +311,7 @@ export function WatchSpacesPage({ onBack }: Props) {
             )}
           </section>
         )}
-        <p className="watchspace-scope-note">M4 currently exposes room lifecycle and moderation over REST. Live playback synchronization, realtime presence, chat and host handoff are M5 work; this screen does not simulate those capabilities.</p>
+        <p className="watchspace-scope-note">Room lifecycle and moderation remain REST-backed. Participant presence now updates over the authenticated WebSocket; playback synchronization, chat and host handoff remain M5 work.</p>
       </section>
     </main>
   );
