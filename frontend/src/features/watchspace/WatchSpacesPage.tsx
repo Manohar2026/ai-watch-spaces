@@ -61,6 +61,18 @@ export function WatchSpacesPage({ onBack }: Props) {
     return () => { active = false; };
   }, [authorized]);
 
+  function handleRequestError(cause: unknown) {
+    if (cause instanceof WatchSpaceApiError && cause.code === 'REMOVED_FROM_ROOM') {
+      // A removed member must not keep seeing room details from an earlier successful read.
+      setRoom(null);
+      setParticipants([]);
+      setRoomId(null);
+      setInviteCode(null);
+      setScreen('overview');
+    }
+    setError(message(cause));
+  }
+
   const loadRoom = useCallback(async (id: string) => {
     setIsLoading(true); setError(null); setNotice(null);
     try {
@@ -69,7 +81,7 @@ export function WatchSpacesPage({ onBack }: Props) {
         watchSpaceApi.participants(token, id).catch(() => [] as RoomParticipant[]),
       ]));
       setRoom(nextRoom); setParticipants(people); setRoomId(id); setScreen('room');
-    } catch (cause) { setError(message(cause)); }
+    } catch (cause) { handleRequestError(cause); }
     finally { setIsLoading(false); }
   }, [authorized]);
 
@@ -94,7 +106,7 @@ export function WatchSpacesPage({ onBack }: Props) {
         : watchSpaceApi.joinByCode(token, inviteCodeInput.trim()));
       setNotice(joined.rejoined ? 'Welcome back. Your previous membership was restored.' : joined.alreadyMember ? 'You are already a member of this Watch Space.' : 'You joined the Watch Space.');
       await loadRoom(joined.watchSpaceId);
-    } catch (cause) { setError(message(cause)); }
+    } catch (cause) { handleRequestError(cause); }
     finally { setIsSaving(false); }
   }
 
@@ -104,7 +116,7 @@ export function WatchSpacesPage({ onBack }: Props) {
       await authorized(action);
       setNotice(success);
       if (roomId) await loadRoom(roomId);
-    } catch (cause) { setError(message(cause)); }
+    } catch (cause) { handleRequestError(cause); }
     finally { setIsSaving(false); }
   }
 
