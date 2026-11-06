@@ -128,8 +128,8 @@ class WatchSpaceWebSocketHandshakeIT {
         http.post().uri("/api/v1/watch-spaces/" + roomId + "/connection-ticket")
                 .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
                 .exchange()
-                .expectStatus().isForbidden()
-                .expectBody().jsonPath("$.code").isEqualTo("NOT_ROOM_MEMBER");
+                .expectStatus().isNotFound()
+                .expectBody().jsonPath("$.code").isEqualTo("NOT_FOUND");
     }
 
     @Test
