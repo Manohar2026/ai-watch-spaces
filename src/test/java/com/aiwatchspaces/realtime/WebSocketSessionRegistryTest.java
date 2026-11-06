@@ -50,6 +50,44 @@ class WebSocketSessionRegistryTest {
     }
 
     @Test
+    void broadcastsPresenceWhenAUserConnectsAndDisconnects() {
+        WatchSpaceRealtimePort rooms = mock(WatchSpaceRealtimePort.class);
+        when(rooms.isResponsive()).thenReturn(true);
+        WebSocketSessionRegistry registry = new WebSocketSessionRegistry(rooms);
+        UUID roomId = UUID.randomUUID();
+        UUID observerId = UUID.randomUUID();
+        UUID joiningUserId = UUID.randomUUID();
+
+        WebSocketSession observerSession = mock(WebSocketSession.class);
+        WebSocketSession joiningSession = mock(WebSocketSession.class);
+        WebSocketSessionRegistry.Connection observer =
+                registry.register(roomId, observerId, observerSession);
+        java.util.List<String> received = new java.util.ArrayList<>();
+        observer.outbound().subscribe(received::add);
+
+        WebSocketSessionRegistry.Connection joining =
+                registry.register(roomId, joiningUserId, joiningSession);
+
+        assertThat(received).hasSize(1);
+        assertThat(received.get(0))
+                .contains("\\"event\\":\\"room.presence\\"")
+                .contains("\\"userId\\":\\"" + joiningUserId + "\\"")
+                .contains("\\"connected\\":true")
+                .contains("\\"connectedCount\\":2");
+
+        registry.unregister(joining);
+
+        assertThat(received).hasSize(2);
+        assertThat(received.get(1))
+                .contains("\\"event\\":\\"room.presence\\"")
+                .contains("\\"userId\\":\\"" + joiningUserId + "\\"")
+                .contains("\\"connected\\":false")
+                .contains("\\"connectedCount\\":1");
+
+        registry.unregister(observer);
+    }
+
+    @Test
     void newerConnectionReplacesOlderSocketWithoutDoubleCountingTheUser() {
         WatchSpaceRealtimePort rooms = mock(WatchSpaceRealtimePort.class);
         when(rooms.isResponsive()).thenReturn(true);
