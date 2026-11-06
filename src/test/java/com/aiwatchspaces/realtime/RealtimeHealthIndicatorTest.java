@@ -100,7 +100,7 @@ class RealtimeHealthIndicatorTest {
         try (DbExecutor executor = DbExecutorTestAccess.create(1, 10)) {
             RoomRecoveryStatus recovery = new RoomRecoveryStatus();
             var indicator = new RealtimeHealthIndicator(
-                    executor, new RealtimeHealthProperties(0.9), recovery);
+                    executor, new RealtimeHealthProperties(0.9), recovery, healthyRooms(), readyTransport());
 
             assertThat(indicator.health().block().getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
             assertThat(indicator.health().block().getDetails())
@@ -129,7 +129,7 @@ class RealtimeHealthIndicatorTest {
             RoomRecoveryStatus recovery = new RoomRecoveryStatus();
             recovery.markCompleted();
             var indicator = new RealtimeHealthIndicator(
-                    executor, new RealtimeHealthProperties(0.9), recovery);
+                    executor, new RealtimeHealthProperties(0.9), recovery, healthyRooms(), readyTransport());
             var health = indicator.health().block();
             assertThat(health.getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
             assertThat(health.getDetails()).containsEntry("dbExecutorSaturated", true);
