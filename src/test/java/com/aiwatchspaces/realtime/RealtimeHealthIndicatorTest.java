@@ -87,7 +87,7 @@ class RealtimeHealthIndicatorTest {
             RoomRecoveryStatus recovery = new RoomRecoveryStatus();
             recovery.markCompleted();
             var indicator = new RealtimeHealthIndicator(
-                    executor, new RealtimeHealthProperties(0.9), recovery);
+                    executor, new RealtimeHealthProperties(0.9), recovery, healthyRooms(), readyTransport());
             indicator.onApplicationEvent(new ContextClosedEvent(new GenericApplicationContext()));
             var health = indicator.health().block();
             assertThat(health.getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
