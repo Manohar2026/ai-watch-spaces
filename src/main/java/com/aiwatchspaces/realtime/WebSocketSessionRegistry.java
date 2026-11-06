@@ -6,6 +6,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.aiwatchspaces.common.error.ApiException;
+import com.aiwatchspaces.common.error.ErrorCode;
 import com.aiwatchspaces.watchspace.WatchSpaceRealtimePort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +40,8 @@ final class WebSocketSessionRegistry {
 
     Connection register(UUID watchSpaceId, UUID userId, WebSocketSession session) {
         if (!rooms.isResponsive()) {
-            throw new com.aiwatchspaces.common.error.ApiException(
-                    com.aiwatchspaces.common.error.ErrorCode.SERVICE_BUSY,
+            throw new ApiException(
+                    ErrorCode.SERVICE_BUSY,
                     "The real-time service is shutting down. Retry shortly.");
         }
         SessionKey key = new SessionKey(watchSpaceId, userId);
