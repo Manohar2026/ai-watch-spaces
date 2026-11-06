@@ -56,6 +56,21 @@ class WebSocketTicketServiceTest {
     }
 
     @Test
+    void expiredTicketsAreRemovedByTheScheduledCleanup() {
+        Instant now = Instant.parse("2026-11-06T10:00:00Z");
+        MutableClock clock = new MutableClock(now);
+        WebSocketTicketService service = new WebSocketTicketService(clock);
+        AuthenticatedUser caller = new AuthenticatedUser(
+                UUID.randomUUID(), SystemRole.USER, now.plusSeconds(300));
+
+        service.issue(caller, UUID.randomUUID());
+        clock.set(now.plusSeconds(31));
+
+        assertThat(service.purgeExpiredTicketsNow()).isEqualTo(1);
+        assertThat(service.outstandingTicketCount()).isZero();
+    }
+
+    @Test
     void ticketCannotOutliveAccessToken() {
         Instant now = Instant.parse("2026-11-06T10:00:00Z");
         WebSocketTicketService service = new WebSocketTicketService(Clock.fixed(now, ZoneOffset.UTC));
