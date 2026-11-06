@@ -8,11 +8,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.server.authentication.ServerBearerTokenAuthenticationConverter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.ServerAuthenticationConverter;
+import org.springframework.security.web.server.authentication.AuthenticationWebFilter;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import reactor.core.publisher.Mono;
@@ -47,16 +49,22 @@ class SecurityConfig {
         };
         ServerWebExchangeMatcher publicAuthPaths = ServerWebExchangeMatchers.pathMatchers(HttpMethod.POST, PUBLIC_AUTH_PATHS);
         ServerBearerTokenAuthenticationConverter bearerTokens = new ServerBearerTokenAuthenticationConverter();
-        ServerAuthenticationConverter bearerTokensOutsidePublicAuth = exchange -> {
-            String path = exchange.getRequest().getPath().pathWithinApplication().value();
-            if (path.startsWith("/ws/watch-spaces/")) {
-                return webSocketAuthenticator.authenticate(exchange);
-            }
-            return publicAuthPaths.matches(exchange)
-                    .flatMap(match -> match.isMatch() ? Mono.empty() : bearerTokens.convert(exchange));
-        };
+        ServerAuthenticationConverter bearerTokensOutsidePublicAuth = exchange -> publicAuthPaths.matches(exchange)
+                .flatMap(match -> match.isMatch() ? Mono.empty() : bearerTokens.convert(exchange));
         ServerAccessDeniedHandler accessDenied = (exchange, e) ->
                 errors.write(exchange, ErrorCode.FORBIDDEN, "Access denied.");
+
+        // The normal resource-server filter authenticates REST Bearer JWTs. Browser WebSockets
+        // use a dedicated one-time-ticket filter because the browser API cannot set Authorization.
+        AuthenticationWebFilter webSocketTicketFilter =
+                new AuthenticationWebFilter(authentication -> Mono.just(authentication));
+        webSocketTicketFilter.setRequiresAuthenticationMatcher(
+                ServerWebExchangeMatchers.pathMatchers("/ws/watch-spaces/**"));
+        webSocketTicketFilter.setServerAuthenticationConverter(webSocketAuthenticator::authenticate);
+        webSocketTicketFilter.setSecurityContextRepository(NoOpServerSecurityContextRepository.getInstance());
+        webSocketTicketFilter.setAuthenticationFailureHandler((webFilterExchange, failure) ->
+                entryPoint.commence(webFilterExchange.getExchange(), failure));
+
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -75,6 +83,7 @@ class SecurityConfig {
                         .jwt(jwt -> jwt.jwtDecoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthentications))
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(accessDenied))
+                .addFilterAfter(webSocketTicketFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(accessDenied))
