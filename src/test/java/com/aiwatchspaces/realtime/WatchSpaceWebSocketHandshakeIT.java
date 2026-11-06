@@ -102,7 +102,7 @@ class WatchSpaceWebSocketHandshakeIT {
         issueTicket(host, roomId).expectStatus().isOk();
 
         issueTicket(host, roomId)
-                .expectStatus().isTooManyRequests()
+                .expectStatus().isEqualTo(429)
                 .expectBody().jsonPath("$.code").isEqualTo("RATE_LIMITED");
     }
 
