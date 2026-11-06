@@ -219,6 +219,16 @@ class RoomLaneRegistry implements ApplicationListener<ContextClosedEvent>, Order
         }
     }
 
+    boolean isResponsive() {
+        synchronized (this) {
+            return !shuttingDown;
+        }
+    }
+
+    boolean hasSaturatedLane(double saturationRatio) {
+        return lanes.values().stream().anyMatch(lane -> lane.isSaturated(saturationRatio));
+    }
+
     int laneCount() {
         return lanes.size();
     }
