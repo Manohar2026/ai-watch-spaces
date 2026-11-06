@@ -26,6 +26,8 @@ A native/scripted client may use the Bearer authorization header described by th
 - The session registry allows one active socket per user per room. A replacement closes the older socket with 4409.
 - Per-session outbound messages use a bounded queue of 256. Overflow closes with 4408.
 - The session registry updates the room lane's connected-session count, preventing an active socket's lane from being evicted.
+- Ticket minting is rate-limited per authenticated user (20/minute by default); the per-user limit and window are configurable.
+- Readiness now requires the WebSocket handler mapping to be registered, the room runtime to be responsive, completed startup recovery, and unsaturated DB and room-lane queues.
 - Oversized inbound text frames close with 1009; unsupported frame types close with 4400. Other client commands are not implemented in this slice.
 
 ## Verification
