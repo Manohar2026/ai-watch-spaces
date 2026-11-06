@@ -11,4 +11,8 @@ public interface WatchSpaceRealtimePort {
     void sessionOpened(UUID watchSpaceId);
 
     void sessionClosed(UUID watchSpaceId);
+
+    boolean isResponsive();
+
+    boolean hasSaturatedLane();
 }
