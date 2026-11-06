@@ -38,11 +38,11 @@ Unit tests cover:
 - expiry and no extension beyond the access-token expiry;
 - replacement of a same-user socket with 4409 and correct connected-session accounting.
 
-The full backend GitHub Actions workflow is the compile/test gate. Browser/manual WebSocket handshake verification is still outstanding for this first slice.
+The full backend GitHub Actions workflow is the compile/test gate. The local Docker/browser handshake was manually verified: the authenticated socket reaches `CONNECTED` and receives `room.snapshot` followed by `room.chat.history`. The committed-event fan-out is covered by focused unit tests.
 
 ## Remaining M5 work
 
-1. Publish committed room events and live presence updates to connected sockets.
+1. Publish connection/disconnection presence updates to connected sockets and project them into participant state.
 2. Add disconnect handling and the 30-second participant reconnect grace; reconnect must not create a duplicate membership or `PARTICIPANT_JOINED`.
 3. Add host-disconnect pause, host grace, deterministic promotion and host reconnect behavior through the serialized room lane.
 4. Add access-token renewal messages, `room.auth.expiring`, same-subject validation, and 4401 expiry close.

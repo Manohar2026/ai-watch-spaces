@@ -19,6 +19,37 @@ import reactor.core.publisher.Mono;
 class WebSocketSessionRegistryTest {
 
     @Test
+    void broadcastOnlyTargetsSocketsRegisteredForTheRequestedRoom() {
+        WatchSpaceRealtimePort rooms = mock(WatchSpaceRealtimePort.class);
+        when(rooms.isResponsive()).thenReturn(true);
+        WebSocketSessionRegistry registry = new WebSocketSessionRegistry(rooms);
+        UUID roomId = UUID.randomUUID();
+        UUID otherRoomId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        WebSocketSession roomSocket = mock(WebSocketSession.class);
+        WebSocketSession otherRoomSocket = mock(WebSocketSession.class);
+        WebSocketSessionRegistry.Connection roomConnection =
+                registry.register(roomId, userId, roomSocket);
+        WebSocketSessionRegistry.Connection otherRoomConnection =
+                registry.register(otherRoomId, userId, otherRoomSocket);
+
+        java.util.List<String> roomMessages = new java.util.ArrayList<>();
+        java.util.List<String> otherRoomMessages = new java.util.ArrayList<>();
+        roomConnection.outbound().subscribe(roomMessages::add);
+        otherRoomConnection.outbound().subscribe(otherRoomMessages::add);
+
+        int recipients = registry.broadcast(roomId, "{\\"event\\":\\"room.event\\"}");
+
+        assertThat(recipients).isEqualTo(1);
+        assertThat(roomMessages).containsExactly("{\\"event\\":\\"room.event\\"}");
+        assertThat(otherRoomMessages).isEmpty();
+
+        registry.unregister(roomConnection);
+        registry.unregister(otherRoomConnection);
+    }
+
+    @Test
     void newerConnectionReplacesOlderSocketWithoutDoubleCountingTheUser() {
         WatchSpaceRealtimePort rooms = mock(WatchSpaceRealtimePort.class);
         when(rooms.isResponsive()).thenReturn(true);

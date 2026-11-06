@@ -74,6 +74,20 @@ final class WebSocketSessionRegistry {
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
+    /**
+     * Publishes an already-serialized room message to currently registered sockets for one room.
+     * Queueing is non-blocking and bounded per connection; a slow consumer is closed by Connection.
+     */
+    int broadcast(UUID watchSpaceId, String messageJson) {
+        int recipients = 0;
+        for (Map.Entry<SessionKey, Connection> entry : sessions.entrySet()) {
+            if (entry.getKey().watchSpaceId().equals(watchSpaceId) && entry.getValue().send(messageJson)) {
+                recipients++;
+            }
+        }
+        return recipients;
+    }
+
     int connectedSessionCount() {
         return sessions.size();
     }
