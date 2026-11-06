@@ -93,6 +93,28 @@ class RoomLaneRegistry implements ApplicationListener<ContextClosedEvent>, Order
         return lane.snapshot();
     }
 
+    void sessionOpened(UUID watchSpaceId) {
+        RoomLane lane;
+        synchronized (this) {
+            if (shuttingDown) {
+                throw new ApiException(ErrorCode.SERVICE_BUSY, "The service is shutting down. Retry shortly.");
+            }
+            lane = lanes.computeIfAbsent(watchSpaceId,
+                    id -> new RoomLane(id, queueCapacity, db, persistence, broadcaster, clock));
+        }
+        lane.sessionOpened();
+    }
+
+    void sessionClosed(UUID watchSpaceId) {
+        RoomLane lane;
+        synchronized (this) {
+            lane = lanes.get(watchSpaceId);
+        }
+        if (lane != null) {
+            lane.sessionClosed();
+        }
+    }
+
     @Scheduled(fixedDelay = 60_000L)
     synchronized void evictIdleLanes() {
         if (shuttingDown) {
