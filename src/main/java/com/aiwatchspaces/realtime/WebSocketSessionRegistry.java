@@ -37,11 +37,21 @@ final class WebSocketSessionRegistry {
     }
 
     Connection register(UUID watchSpaceId, UUID userId, WebSocketSession session) {
+        if (!rooms.isResponsive()) {
+            throw new com.aiwatchspaces.common.error.ApiException(
+                    com.aiwatchspaces.common.error.ErrorCode.SERVICE_BUSY,
+                    "The real-time service is shutting down. Retry shortly.");
+        }
         SessionKey key = new SessionKey(watchSpaceId, userId);
         Connection next = new Connection(key, session);
         Connection previous = sessions.put(key, next);
         if (previous == null) {
-            rooms.sessionOpened(watchSpaceId);
+            try {
+                rooms.sessionOpened(watchSpaceId);
+            } catch (RuntimeException failure) {
+                sessions.remove(key, next);
+                throw failure;
+            }
         } else {
             previous.close(REPLACED);
         }
@@ -64,10 +74,6 @@ final class WebSocketSessionRegistry {
 
     int connectedSessionCount() {
         return sessions.size();
-    }
-
-    boolean isResponsive() {
-        return sessions.size() >= 0;
     }
 
     final class Connection {
