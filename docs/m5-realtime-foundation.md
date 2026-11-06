@@ -23,6 +23,8 @@ A native/scripted client may use the Bearer authorization header described by th
 - `GET /ws/watch-spaces/{watchSpaceId}` is mapped through WebFlux.
 - The connection sends `room.snapshot` followed by `room.chat.history` (currently empty until the chat milestone is implemented).
 - Committed room-ledger events are fanned out to sockets in the same room as `room.event` messages after the database transaction commits. The transport projection includes event id, sequence number, actor, event type, playback position, payload, correlation id and occurrence time; it deliberately omits the idempotency key.
+- First-session connect and final-session disconnect changes are fanned out as transient `room.presence` messages to the other sockets in the same room. The payload contains `userId`, `connected` and `connectedCount`; replacing a user's socket does not produce a false offline/online transition.
+- The browser applies `room.presence` to the matching participant and derives the live connected count from participant state.
 - The snapshot includes room lifecycle/settings, playback's persisted starting snapshot, sequence/state version, members, this user's role/mute state, connected flags, and access-token expiry.
 - The session registry allows one active socket per user per room. A replacement closes the older socket with 4409.
 - Per-session outbound messages use a bounded queue of 256. Overflow closes with 4408.
@@ -37,18 +39,18 @@ Unit tests cover:
 - ticket binding to user and room;
 - one-time consumption;
 - expiry and no extension beyond the access-token expiry;
-- replacement of a same-user socket with 4409 and correct connected-session accounting.
+- replacement of a same-user socket with 4409 and correct connected-session accounting;
+- room-scoped presence broadcasts on connect/disconnect, including connected counts.
 
-The full backend GitHub Actions workflow is the compile/test gate. The local Docker/browser handshake was manually verified: the authenticated socket reaches `CONNECTED` and receives `room.snapshot` followed by `room.chat.history`. The committed-event fan-out is covered by focused unit tests.
+The full backend GitHub Actions workflow is the compile/test gate. The local Docker/browser handshake was manually verified: the authenticated socket reaches `CONNECTED` and receives `room.snapshot` followed by `room.chat.history`. Committed-event fan-out and presence transitions are covered by focused unit tests. Manual two-account presence verification remains outstanding.
 
 ## Remaining M5 work
 
-1. Publish connection/disconnection presence updates to connected sockets and project them into participant state.
-2. Add disconnect handling and the 30-second participant reconnect grace; reconnect must not create a duplicate membership or `PARTICIPANT_JOINED`.
-3. Add host-disconnect pause, host grace, deterministic promotion and host reconnect behavior through the serialized room lane.
-4. Add access-token renewal messages, `room.auth.expiring`, same-subject validation, and 4401 expiry close.
-5. Enforce terminal close codes for room end/removal (4410/4411) and active membership revalidation.
-6. Add the complete scripted JUnit WebSocket integration suite: invalid ticket, non-member, one-time ticket replay, snapshot ordering, replacement 4409, reconnect without duplicate membership, auth expiry/renewal, 4401/4409/4411.
-7. Manually verify the current browser-side ticket and WebSocket client with the two local accounts, then refine connection-state handling based on observed behavior.
+1. Add disconnect handling and the 30-second participant reconnect grace; reconnect must not create a duplicate membership or `PARTICIPANT_JOINED`.
+2. Add host-disconnect pause, host grace, deterministic promotion and host reconnect behavior through the serialized room lane.
+3. Add access-token renewal messages, `room.auth.expiring`, same-subject validation, and 4401 expiry close.
+4. Enforce terminal close codes for room end/removal (4410/4411) and active membership revalidation.
+5. Add the complete scripted JUnit WebSocket integration suite: invalid ticket, non-member, one-time ticket replay, snapshot ordering, replacement 4409, reconnect without duplicate membership, auth expiry/renewal, 4401/4409/4411.
+6. Manually verify the browser-side ticket, live room-event fan-out and participant presence using two local accounts, then refine connection-state handling based on observed behavior.
 
 Playback mutations, clock synchronization/drift, chat persistence and chat enforcement belong to later milestones and must not be silently added to this slice.
