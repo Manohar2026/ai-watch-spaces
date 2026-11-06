@@ -34,6 +34,7 @@ final class RoomLane {
     private final RoomBroadcaster broadcaster;
     private final Clock clock;
     private final Sinks.Many<LaneTask<?>> queue;
+    private final int pendingCapacity;
     private final AtomicReference<RoomState> state = new AtomicReference<>();
     private final AtomicInteger pendingTasks = new AtomicInteger();
     private final AtomicInteger connectedSessions = new AtomicInteger();
@@ -47,6 +48,7 @@ final class RoomLane {
         this.persistence = persistence;
         this.broadcaster = broadcaster;
         this.clock = clock;
+        this.pendingCapacity = queueCapacity + 1; // one task may be executing while the bounded queue is full
         this.queue = Sinks.many().unicast().onBackpressureBuffer(new ArrayBlockingQueue<>(queueCapacity));
         Flux<LaneTask<?>> commands = queue.asFlux();
         commands.concatMap(this::executeUnchecked, 1).subscribe();
@@ -88,6 +90,10 @@ final class RoomLane {
     boolean isEvictable(long nowNanos) {
         return pendingTasks.get() == 0 && connectedSessions.get() == 0 && pendingTimers.get() == 0
                 && nowNanos - lastActivityNanos >= IDLE_EVICTION_NANOS;
+    }
+
+    boolean isSaturated(double saturationRatio) {
+        return pendingTasks.get() >= Math.ceil(pendingCapacity * saturationRatio);
     }
 
     void sessionOpened() {
