@@ -13,10 +13,12 @@ import org.springframework.web.reactive.socket.WebSocketHandler;
 class RealtimeWebSocketConfiguration {
 
     @Bean
-    HandlerMapping watchSpaceWebSocketMapping(WatchSpaceWebSocketHandler handler) {
+    HandlerMapping watchSpaceWebSocketMapping(WatchSpaceWebSocketHandler handler,
+                                               WebSocketTransportStatus transportStatus) {
         SimpleUrlHandlerMapping mapping = new SimpleUrlHandlerMapping();
         mapping.setUrlMap(Map.of("/ws/watch-spaces/**", (WebSocketHandler) handler));
         mapping.setOrder(-1);
+        transportStatus.markHandlerMappingRegistered();
         return mapping;
     }
 }
