@@ -21,6 +21,7 @@ class WebSocketSessionRegistryTest {
     @Test
     void newerConnectionReplacesOlderSocketWithoutDoubleCountingTheUser() {
         WatchSpaceRealtimePort rooms = mock(WatchSpaceRealtimePort.class);
+        when(rooms.isResponsive()).thenReturn(true);
         WebSocketSessionRegistry registry = new WebSocketSessionRegistry(rooms);
         WebSocketSession firstSession = mock(WebSocketSession.class);
         WebSocketSession secondSession = mock(WebSocketSession.class);
