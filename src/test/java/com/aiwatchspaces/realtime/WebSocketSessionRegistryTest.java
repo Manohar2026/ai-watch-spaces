@@ -39,10 +39,10 @@ class WebSocketSessionRegistryTest {
         roomConnection.outbound().subscribe(roomMessages::add);
         otherRoomConnection.outbound().subscribe(otherRoomMessages::add);
 
-        int recipients = registry.broadcast(roomId, "{\\"event\\":\\"room.event\\"}");
+        int recipients = registry.broadcast(roomId, "room.event.frame");
 
         assertThat(recipients).isEqualTo(1);
-        assertThat(roomMessages).containsExactly("{\\"event\\":\\"room.event\\"}");
+        assertThat(roomMessages).containsExactly("room.event.frame");
         assertThat(otherRoomMessages).isEmpty();
 
         registry.unregister(roomConnection);

@@ -22,6 +22,7 @@ A native/scripted client may use the Bearer authorization header described by th
 - Ticket issuance validates the current active room membership; ticket consumption is one-time, room-bound and expiry-bound. Membership is rechecked during handshake authentication.
 - `GET /ws/watch-spaces/{watchSpaceId}` is mapped through WebFlux.
 - The connection sends `room.snapshot` followed by `room.chat.history` (currently empty until the chat milestone is implemented).
+- Committed room-ledger events are fanned out to sockets in the same room as `room.event` messages after the database transaction commits. The transport projection includes event id, sequence number, actor, event type, playback position, payload, correlation id and occurrence time; it deliberately omits the idempotency key.
 - The snapshot includes room lifecycle/settings, playback's persisted starting snapshot, sequence/state version, members, this user's role/mute state, connected flags, and access-token expiry.
 - The session registry allows one active socket per user per room. A replacement closes the older socket with 4409.
 - Per-session outbound messages use a bounded queue of 256. Overflow closes with 4408.
