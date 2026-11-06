@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.aiwatchspaces.common.ratelimit.RateLimiter;
 import com.aiwatchspaces.support.AuthTestSupport;
 import com.aiwatchspaces.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +29,10 @@ import reactor.core.publisher.Mono;
 
 /** M5 ticket-authenticated WebSocket upgrade and initial snapshot contract against PostgreSQL 17. */
 @IntegrationTest
-@TestPropertySource(properties = "aiws.assets.directory=target/test-assets")
+@TestPropertySource(properties = {
+        "aiws.assets.directory=target/test-assets",
+        "aiws.rate-limits.realtime.ticket-per-user.limit=2"
+})
 class WatchSpaceWebSocketHandshakeIT {
 
     @Autowired
@@ -40,6 +44,9 @@ class WatchSpaceWebSocketHandshakeIT {
     @Autowired
     JwtEncoder encoder;
 
+    @Autowired
+    RateLimiter rateLimiter;
+
     @LocalServerPort
     int port;
 
@@ -48,6 +55,7 @@ class WatchSpaceWebSocketHandshakeIT {
 
     @BeforeEach
     void setUp() {
+        rateLimiter.reset();
         auth = new AuthTestSupport(http, jdbc, encoder);
     }
 
@@ -82,6 +90,20 @@ class WatchSpaceWebSocketHandshakeIT {
         assertThat(frames.get(1))
                 .contains("\"event\":\"room.chat.history\"")
                 .doesNotContain("inviteCodeHash", "invite_code_hash");
+    }
+
+    @Test
+    void ticketMintingIsRateLimitedPerAuthenticatedUser() {
+        AuthTestSupport.Account host = auth.newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+        UUID roomId = createRoom(host, titleId);
+
+        issueTicket(host, roomId).expectStatus().isOk();
+        issueTicket(host, roomId).expectStatus().isOk();
+
+        issueTicket(host, roomId)
+                .expectStatus().isTooManyRequests()
+                .expectBody().jsonPath("$.code").isEqualTo("RATE_LIMITED");
     }
 
     @Test
