@@ -17,7 +17,7 @@ import reactor.core.publisher.Mono;
 
 /** Reactive application boundary; room changes are submitted to the serialized mutation lane. */
 @Component
-class WatchSpaceApplicationService {
+class WatchSpaceApplicationService implements WatchSpaceRealtimePort {
 
     private final RoomLaneRegistry lanes;
     private final WatchSpacePersistence persistence;
