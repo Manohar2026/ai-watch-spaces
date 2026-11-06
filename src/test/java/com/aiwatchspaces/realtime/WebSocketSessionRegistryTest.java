@@ -70,19 +70,19 @@ class WebSocketSessionRegistryTest {
 
         assertThat(received).hasSize(1);
         assertThat(received.get(0))
-                .contains("\\"event\\":\\"room.presence\\"")
-                .contains("\\"userId\\":\\"" + joiningUserId + "\\"")
-                .contains("\\"connected\\":true")
-                .contains("\\"connectedCount\\":2");
+                .contains("\"event\":\"room.presence\"")
+                .contains("\"userId\":\"" + joiningUserId + "\"")
+                .contains("\"connected\":true")
+                .contains("\"connectedCount\":2");
 
         registry.unregister(joining);
 
         assertThat(received).hasSize(2);
         assertThat(received.get(1))
-                .contains("\\"event\\":\\"room.presence\\"")
-                .contains("\\"userId\\":\\"" + joiningUserId + "\\"")
-                .contains("\\"connected\\":false")
-                .contains("\\"connectedCount\\":1");
+                .contains("\"event\":\"room.presence\"")
+                .contains("\"userId\":\"" + joiningUserId + "\"")
+                .contains("\"connected\":false")
+                .contains("\"connectedCount\":1");
 
         registry.unregister(observer);
     }
