@@ -244,6 +244,9 @@ class WatchSpaceApplicationService implements WatchSpaceRealtimePort {
         return lanes.snapshot(watchSpaceId).map(room -> {
             requireNotRemoved(room, userId);
             if (!hasActiveMembership(room, userId)) {
+                if (room.privacy() == RoomState.Privacy.INVITE_ONLY) {
+                    throw notFound();
+                }
                 throw new ApiException(ErrorCode.NOT_ROOM_MEMBER,
                         "An active room membership is required for a WebSocket connection.");
             }
