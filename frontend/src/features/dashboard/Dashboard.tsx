@@ -1,6 +1,6 @@
 import { useAuth } from '../auth/AuthProvider';
 
-export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
+export function Dashboard({ onBrowseCatalog, onOpenWatchSpaces }: { onBrowseCatalog(): void; onOpenWatchSpaces(): void }) {
   const { user, logout, isSubmitting } = useAuth();
 
   if (!user) {
@@ -47,13 +47,16 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
           <button className="primary-button" type="button" onClick={onBrowseCatalog}>
             Browse catalogue <span aria-hidden="true">→</span>
           </button>
+          <button className="dashboard-secondary-action" type="button" onClick={onOpenWatchSpaces}>
+            Manage Watch Spaces <span aria-hidden="true">↗</span>
+          </button>
         </div>
 
         <div className="next-step-card">
           <span className="next-step-icon">✦</span>
           <div>
             <h3>Authentication is connected.</h3>
-            <p>Your catalogue now loads from the Spring Boot API. Watch spaces and room history will arrive in later milestones.</p>
+            <p>Your catalogue and Watch Space lifecycle now connect to the Spring Boot API. Real-time playback, live chat and presence are planned for the next backend milestone.</p>
           </div>
         </div>
       </section>
