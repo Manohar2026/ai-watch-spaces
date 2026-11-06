@@ -35,14 +35,14 @@ class WebSocketTicketController {
     @PostMapping("/{watchSpaceId}/connection-ticket")
     Mono<WebSocketTicketResponse> issue(
             @PathVariable UUID watchSpaceId, AuthenticatedUser caller) {
+        RateLimiter.Decision decision = rateLimiter.tryAcquire(
+                "realtime:ticket:user:" + caller.userId(),
+                limits.perUserLimit(), limits.window());
+        if (!decision.allowed()) {
+            return Mono.error(ApiException.rateLimited(decision.retryAfterSeconds()));
+        }
         return rooms.snapshot(watchSpaceId, caller.userId())
                 .map(ignored -> {
-                    RateLimiter.Decision decision = rateLimiter.tryAcquire(
-                            "realtime:ticket:user:" + caller.userId(),
-                            limits.perUserLimit(), limits.window());
-                    if (!decision.allowed()) {
-                        throw ApiException.rateLimited(decision.retryAfterSeconds());
-                    }
                     WebSocketTicketService.IssuedWebSocketTicket ticket = tickets.issue(caller, watchSpaceId);
                     return new WebSocketTicketResponse(ticket.value(), ticket.expiresAt());
                 });
