@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   pull_request:
-    branches: [main, feature/full-stack-architecture]
+    branches: [main, feature/m4-watchspace-lifecycle, feature/full-stack-architecture]
     paths:
       - "src/**"
       - "pom.xml"
