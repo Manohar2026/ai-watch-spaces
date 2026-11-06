@@ -60,9 +60,24 @@ The migration does not add any new table or column beyond the approved V3 target
 
 Schema parity verifies the migration shape only. The room-creation, mutation-lane, membership, capacity, invite-code, lifecycle, recovery and expiry behaviors are covered separately by the integration tests listed above. A green CI run is automated verification; it does not substitute for manual request/response verification against a running development instance.
 
-## Manual API verification
+## Manual local browser verification
 
-A repeatable Postman collection or scripted HTTP verification should exercise the REST contract in `docs/m4-watchspace-api.md` using at least two registered users. The browser F4 client is a convenience for demonstrating the current REST lifecycle; it does not replace automated integration tests or validate WebSocket behavior, which belongs to M5.
+**Verified on 2026-11-06** against a local Docker Compose stack (PostgreSQL 17.11 + Spring Boot) and the React/Vite frontend, using two separately authenticated browser sessions and the seeded published title **The First Bloom**.
+
+The following user-visible flows completed successfully:
+
+- Host created an invite-only Watch Space and received the one-time invite code; a second account joined using that code.
+- Host locked and unlocked the room; the guest refreshed and observed the changed access state.
+- Host started the scheduled room; both sessions observed `LIVE`. Host ended the room; both sessions observed `ENDED`.
+- Host muted and unmuted the guest.
+- Guest left; host refreshed and saw only the remaining active membership.
+- Host rotated the invite code; the old code was rejected and the replacement code allowed the guest to rejoin.
+- Host removed the guest; the guest received `REMOVED_FROM_ROOM` and could not rejoin. The F4 client was corrected to clear stale room details and return the removed user to the overview.
+- Host updated maximum participants to 4 and AI verbosity to `CHATTY`; the values remained after refresh.
+- Host disabled trivia and voting and enabled chat-muted; all three values remained after refresh.
+
+This is manual browser-based end-to-end verification of the implemented REST flows, not a captured Postman collection or raw HTTP transcript. It does not validate WebSocket behavior, realtime presence, synchronized playback, chat enforcement, host handoff, or vote-lifecycle side effects; those remain outside the verified M4 browser scope.
+
 
 ## Remaining M4 implementation
 
@@ -70,4 +85,4 @@ A repeatable Postman collection or scripted HTTP verification should exercise th
 2. Idle auto-end and host/participant grace timers require the M5 connected-session registry; scheduled/unstarted expiry is implemented in M4.
 3. Post-commit broadcast delivery and socket closure with code 1001 require the M5 WebSocket broadcaster. M4 stale-lane invalidation and graceful lane drain are implemented.
 4. Integrate the settings side effect that cancels an open vote when voting is disabled once the vote tables/migration and vote lifecycle exist.
-5. Manual end-to-end request/response verification against a running development instance, with Postman or equivalent evidence.
+5. A reusable Postman collection or scripted raw-request transcript remains a useful supplementary verification artifact; the implemented happy-path lifecycle and moderation flows have been manually verified through the local F4 browser UI on 2026-11-06.
