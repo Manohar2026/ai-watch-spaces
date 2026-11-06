@@ -57,12 +57,17 @@ final class WebSocketSessionRegistry {
         } else {
             previous.close(REPLACED);
         }
+        // A replacement is still the same logical participant; only a first session changes presence.
+        if (previous == null) {
+            publishPresence(watchSpaceId, userId, true, next);
+        }
         return next;
     }
 
     void unregister(Connection connection) {
         if (sessions.remove(connection.key(), connection)) {
             rooms.sessionClosed(connection.key().watchSpaceId());
+            publishPresence(connection.key().watchSpaceId(), connection.key().userId(), false, null);
         }
         connection.complete();
     }
@@ -79,13 +84,29 @@ final class WebSocketSessionRegistry {
      * Queueing is non-blocking and bounded per connection; a slow consumer is closed by Connection.
      */
     int broadcast(UUID watchSpaceId, String messageJson) {
+        return broadcastExcept(watchSpaceId, messageJson, null);
+    }
+
+    private int broadcastExcept(UUID watchSpaceId, String messageJson, Connection excluded) {
         int recipients = 0;
         for (Map.Entry<SessionKey, Connection> entry : sessions.entrySet()) {
-            if (entry.getKey().watchSpaceId().equals(watchSpaceId) && entry.getValue().send(messageJson)) {
+            if (entry.getKey().watchSpaceId().equals(watchSpaceId)
+                    && entry.getValue() != excluded
+                    && entry.getValue().send(messageJson)) {
                 recipients++;
             }
         }
         return recipients;
+    }
+
+    private void publishPresence(UUID watchSpaceId, UUID userId, boolean connected, Connection excluded) {
+        // UUID values are safe to embed directly; the envelope contains no user-supplied strings.
+        String message = "{\"event\":\"room.presence\",\"watchSpaceId\":\"" + watchSpaceId
+                + "\",\"ts\":" + System.currentTimeMillis()
+                + ",\"payload\":{\"userId\":\"" + userId
+                + "\",\"connected\":" + connected
+                + ",\"connectedCount\":" + connectedUserIds(watchSpaceId).size() + "}}";
+        broadcastExcept(watchSpaceId, message, excluded);
     }
 
     int connectedSessionCount() {
