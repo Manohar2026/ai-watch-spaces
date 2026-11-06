@@ -14,5 +14,5 @@ public interface WatchSpaceRealtimePort {
 
     boolean isResponsive();
 
-    boolean hasSaturatedLane();
+    boolean hasSaturatedLane(double saturationRatio);
 }
