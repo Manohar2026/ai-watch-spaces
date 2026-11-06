@@ -3,8 +3,10 @@ import { AuthProvider, useAuth } from '../features/auth/AuthProvider';
 import { AuthScreen } from '../features/auth/AuthScreen';
 import { Dashboard } from '../features/dashboard/Dashboard';
 import { CatalogPage } from '../features/catalog/CatalogPage';
+import { WatchSpacesPage } from '../features/watchspace/WatchSpacesPage';
+import '../features/watchspace/watchspaces.css';
 
-type View = 'home' | 'login' | 'register' | 'catalog';
+type View = 'home' | 'login' | 'register' | 'catalog' | 'watchspaces';
 
 function AppContent() {
   const [view, setView] = useState<View>('home');
@@ -12,7 +14,7 @@ function AppContent() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user && view === 'catalog') {
+    if (!user && (view === 'catalog' || view === 'watchspaces')) {
       setView('home');
     }
   }, [user, view]);
@@ -21,7 +23,10 @@ function AppContent() {
     if (view === 'catalog') {
       return <CatalogPage onBack={() => setView('home')} />;
     }
-    return <Dashboard onBrowseCatalog={() => setView('catalog')} />;
+    if (view === 'watchspaces') {
+      return <WatchSpacesPage onBack={() => setView('home')} />;
+    }
+    return <Dashboard onBrowseCatalog={() => setView('catalog')} onOpenWatchSpaces={() => setView('watchspaces')} />;
   }
 
   if (view === 'login' || view === 'register') {
