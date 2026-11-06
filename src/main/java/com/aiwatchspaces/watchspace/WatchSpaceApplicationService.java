@@ -242,7 +242,11 @@ class WatchSpaceApplicationService implements WatchSpaceRealtimePort {
     @Override
     public Mono<WatchSpaceRealtimeSnapshot> snapshot(UUID watchSpaceId, UUID userId) {
         return lanes.snapshot(watchSpaceId).map(room -> {
-            requireMember(room, userId);
+            requireNotRemoved(room, userId);
+            if (!hasActiveMembership(room, userId)) {
+                throw new ApiException(ErrorCode.NOT_ROOM_MEMBER,
+                        "An active room membership is required for a WebSocket connection.");
+            }
             if (room.status() == RoomState.Status.ENDED) {
                 throw new ApiException(ErrorCode.ROOM_ENDED, "This room has ended.");
             }
@@ -289,6 +293,11 @@ class WatchSpaceApplicationService implements WatchSpaceRealtimePort {
 
     private static boolean hasMembership(RoomState room, UUID userId) {
         return room.participants().stream().anyMatch(participant -> participant.userId().equals(userId));
+    }
+
+    private static boolean hasActiveMembership(RoomState room, UUID userId) {
+        return room.participants().stream()
+                .anyMatch(participant -> participant.userId().equals(userId) && participant.leftAt() == null);
     }
 
     private static void requireNotRemoved(RoomState room, UUID userId) {
