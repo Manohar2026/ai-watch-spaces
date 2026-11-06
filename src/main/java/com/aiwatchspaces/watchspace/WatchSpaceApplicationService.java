@@ -277,6 +277,16 @@ class WatchSpaceApplicationService implements WatchSpaceRealtimePort {
         lanes.sessionClosed(watchSpaceId);
     }
 
+    @Override
+    public boolean isResponsive() {
+        return lanes.isResponsive();
+    }
+
+    @Override
+    public boolean hasSaturatedLane(double saturationRatio) {
+        return lanes.hasSaturatedLane(saturationRatio);
+    }
+
     private static boolean hasMembership(RoomState room, UUID userId) {
         return room.participants().stream().anyMatch(participant -> participant.userId().equals(userId));
     }
