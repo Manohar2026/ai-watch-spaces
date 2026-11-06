@@ -85,6 +85,32 @@ class WatchSpaceWebSocketHandshakeIT {
     }
 
     @Test
+    void historicalMembershipCannotMintATicketAfterLeaving() {
+        AuthTestSupport.Account host = auth.newAccount();
+        AuthTestSupport.Account guest = auth.newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+        Map<?, ?> room = createRoomResponse(host, titleId);
+        UUID roomId = UUID.fromString(room.get("watchSpaceId").toString());
+
+        http.post().uri("/api/v1/watch-spaces/" + roomId + "/join")
+                .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
+                .bodyValue(Map.of("inviteCode", room.get("inviteCode")))
+                .exchange()
+                .expectStatus().isOk();
+
+        http.post().uri("/api/v1/watch-spaces/" + roomId + "/leave")
+                .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isNoContent();
+
+        http.post().uri("/api/v1/watch-spaces/" + roomId + "/connection-ticket")
+                .headers(headers -> headers.setBearerAuth(guest.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("NOT_ROOM_MEMBER");
+    }
+
+    @Test
     void nonMemberCannotMintAConnectionTicket() {
         AuthTestSupport.Account host = auth.newAccount();
         AuthTestSupport.Account outsider = auth.newAccount();
@@ -159,13 +185,16 @@ class WatchSpaceWebSocketHandshakeIT {
     }
 
     private UUID createRoom(AuthTestSupport.Account host, UUID titleId) {
-        Map<?, ?> response = http.post().uri("/api/v1/watch-spaces")
+        return UUID.fromString(createRoomResponse(host, titleId).get("watchSpaceId").toString());
+    }
+
+    private Map<?, ?> createRoomResponse(AuthTestSupport.Account host, UUID titleId) {
+        return http.post().uri("/api/v1/watch-spaces")
                 .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
                 .bodyValue(Map.of("titleId", titleId.toString(), "name", "M5 Handshake Test"))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(Map.class)
                 .returnResult().getResponseBody();
-        return UUID.fromString(response.get("watchSpaceId").toString());
     }
 }
