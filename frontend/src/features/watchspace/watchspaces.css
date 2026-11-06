@@ -85,3 +85,14 @@
 .watchspace-settings-note { grid-column:1/-1; margin:0; color:#8993a0; font-size:9px; line-height:1.6; }
 .watchspace-settings-submit { grid-column:1/-1; min-height:40px; justify-content:center; border:0; }
 @media(max-width:600px){.watchspace-settings-form{grid-template-columns:1fr}}
+
+/* M5 authenticated WebSocket connection status */
+.watchspace-realtime-status { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:18px 0 0; padding:12px 14px; border:1px solid var(--line); border-radius:7px; background:rgba(255,255,255,.018); }
+.watchspace-realtime-status > div { display:grid; gap:5px; flex:none; }
+.watchspace-realtime-status small { color:#818b98; font-size:8px; letter-spacing:1px; }
+.watchspace-realtime-status strong { color:#d8eab5; font:600 10px 'Space Grotesk',sans-serif; }
+.watchspace-realtime-status p { margin:0; max-width:570px; color:#8993a0; font-size:9px; line-height:1.6; text-align:right; }
+.watchspace-realtime-status.connecting strong { color:#e8d59a; }
+.watchspace-realtime-status.error strong,.watchspace-realtime-status.replaced strong { color:#ffaaaa; }
+.watchspace-realtime-status.disconnected strong { color:#929ba8; }
+@media(max-width:600px){.watchspace-realtime-status{align-items:flex-start;flex-direction:column}.watchspace-realtime-status p{text-align:left}}
