@@ -1,6 +1,6 @@
 package com.aiwatchspaces.realtime;
 
-import java.util.ArrayBlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
