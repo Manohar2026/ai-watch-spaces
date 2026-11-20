@@ -67,7 +67,7 @@ public final class WatchSpaceDtos {
         }
     }
 
-    public record RoomParticipantResponse(UUID userId, String displayName, String roomRole) {
+    public record RoomParticipantResponse(UUID userId, String displayName, String roomRole, boolean online) {
     }
 
     public record RoomIdResponse(UUID watchSpaceId) {
