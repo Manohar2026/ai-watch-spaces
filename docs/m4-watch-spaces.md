@@ -16,8 +16,11 @@ All routes require a valid bearer access token.
 | `POST /api/v1/watch-spaces/{id}/end` | Host ends a room and closes active memberships. |
 | `POST /api/v1/watch-spaces/{id}/leave` | A viewer leaves; if the host leaves, the room ends. |
 | `POST /api/v1/watch-spaces/{id}/playback` | Host updates shared playback. Body: `{ "playbackState": "PLAYING", "positionMs": 12000 }`. Use `PAUSED` to pause or send a position to seek. |
+| `POST /api/v1/watch-spaces/{id}/heartbeat` | Active room members report presence. The client sends this every 10 seconds; a member is shown online for 30 seconds after the last heartbeat. |
+| `GET /api/v1/watch-spaces/{id}/chat?afterSequence=0&limit=50` | Read recent durable room messages, ordered by room sequence. Subsequent polls pass the latest `sequenceNo`. |
+| `POST /api/v1/watch-spaces/{id}/chat` | Send `{ "body": "Hello everyone" }`. Plain text only, up to 2,000 characters, rate-limited to 10 messages per minute per user and room. |
 
-The room response includes the title's media URI and duration, the caller's role, the room status, shared playback state and timestamp, and the active member list. Clients poll the room every 1.2 seconds and correct playback drift against the server timestamp. The host controls play, pause, and seek; viewers follow. This first pass uses HTTP polling; WebSocket delivery and connection-based presence are not implemented yet.
+The room response includes the title's media URI and duration, the caller's role, the room status, shared playback state and timestamp, and the active member list with online status. Clients poll the room every 1.2 seconds and correct playback drift against the server timestamp. Chat uses durable messages plus 1.6-second polling; presence uses 10-second heartbeats and a 30-second expiry window. This first pass uses authenticated HTTP polling; WebSocket delivery is not implemented yet.
 
 ## Local configuration
 
@@ -27,8 +30,8 @@ To seed the sample title, follow the opt-in steps in [m3-catalog-timeline.md](m3
 
 ## Current limits
 
-- Chat and WebSocket presence are not implemented.
-- Participant changes in an open room appear on the next room poll.
-- Create/join/start/end/leave/playback changes are serialized through a bounded per-room mutation queue and persisted to PostgreSQL with room event sequence guards.
+- Typing indicators, reactions, moderation, and WebSocket transport are not implemented.
+- Participant changes in an open room appear on the next room poll; a backgrounded or closed client is marked away after 30 seconds.
+- Create/join/start/end/leave/playback/chat changes are serialized through a bounded per-room mutation queue and persisted to PostgreSQL with room event sequence guards. Heartbeats refresh presence without adding room events.
 - M4 code has not been run against a local PostgreSQL environment in this work session.
 
