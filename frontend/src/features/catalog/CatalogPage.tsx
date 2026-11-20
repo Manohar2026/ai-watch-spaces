@@ -3,6 +3,7 @@ import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { catalogApi, formatDuration, type PageResponse, type TitleDetail, type TitleSummary } from './catalogApi';
 import { watchSpaceApi, type WatchSpace } from '../watchspace/watchSpaceApi';
+import './catalog-admin.css';
 
 const PAGE_SIZE = 12;
 
@@ -29,7 +30,7 @@ function friendlyError(error: unknown): string {
 }
 
 export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
-  const { getAccessToken, refreshAccessToken, logout } = useAuth();
+  const { user, getAccessToken, refreshAccessToken, logout } = useAuth();
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [genre, setGenre] = useState('');
@@ -49,6 +50,17 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [roomPending, setRoomPending] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createPending, setCreatePending] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createDescription, setCreateDescription] = useState('');
+  const [createDurationSeconds, setCreateDurationSeconds] = useState('5');
+  const [createVideoUrl, setCreateVideoUrl] = useState('');
+  const [createLocale, setCreateLocale] = useState('en');
+  const [createGenres, setCreateGenres] = useState('');
+  const [catalogActionError, setCatalogActionError] = useState<string | null>(null);
+  const [archivingTitleId, setArchivingTitleId] = useState<string | null>(null);
+  const isAdmin = user?.systemRole === 'ADMIN';
 
   async function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
     let token = getAccessToken();
@@ -149,6 +161,64 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     }
   }
 
+  async function createTitle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isAdmin || createPending) return;
+    const durationSeconds = Number(createDurationSeconds);
+    if (!Number.isFinite(durationSeconds) || durationSeconds < 1 || durationSeconds > 86_400) {
+      setCatalogActionError('Duration must be between 1 second and 24 hours.');
+      return;
+    }
+    setCreatePending(true);
+    setCatalogActionError(null);
+    try {
+      await authorized((token) => catalogApi.create(token, {
+        name: createName.trim(),
+        description: createDescription.trim(),
+        durationMs: Math.round(durationSeconds * 1_000),
+        videoAssetUri: createVideoUrl.trim(),
+        defaultLocale: createLocale.trim() || 'en',
+        genres: createGenres.split(',').map((genre) => genre.trim()).filter(Boolean),
+      }));
+      setCreateOpen(false);
+      setCreateName('');
+      setCreateDescription('');
+      setCreateDurationSeconds('5');
+      setCreateVideoUrl('');
+      setCreateLocale('en');
+      setCreateGenres('');
+      setQuery('');
+      setAppliedQuery('');
+      setGenre('');
+      setAppliedGenre('');
+      setPage(0);
+      setReloadVersion((current) => current + 1);
+    } catch (createError) {
+      setCatalogActionError(friendlyError(createError));
+    } finally {
+      setCreatePending(false);
+    }
+  }
+
+  async function archiveTitle(title: TitleSummary) {
+    if (!isAdmin || archivingTitleId) return;
+    const confirmed = window.confirm(
+      `Remove "${title.name}" from the published catalogue? Existing rooms and history will be preserved.`,
+    );
+    if (!confirmed) return;
+    setArchivingTitleId(title.id);
+    setCatalogActionError(null);
+    try {
+      await authorized((token) => catalogApi.archive(token, title.id));
+      if (selectedTitleId === title.id) setSelectedTitleId(null);
+      setReloadVersion((current) => current + 1);
+    } catch (archiveError) {
+      setCatalogActionError(friendlyError(archiveError));
+    } finally {
+      setArchivingTitleId(null);
+    }
+  }
+
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPage(0);
@@ -176,6 +246,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
         <div className="catalog-top-actions">
+          {isAdmin && <button className="primary-button catalog-admin-add" type="button" onClick={() => { setCatalogActionError(null); setCreateOpen(true); }}>Add title <span aria-hidden="true">+</span></button>}
           <button className="catalog-back-button catalog-join-button" type="button" onClick={() => { setJoinError(null); setJoinOpen(true); }}>Join a space</button>
           <button className="catalog-back-button" type="button" onClick={onBack}>Dashboard</button>
           <button className="dashboard-logout" type="button" onClick={() => void logout()}>Sign out</button>
@@ -191,6 +262,8 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
           </div>
           {result && <span className="catalog-count">{result.totalElements} {result.totalElements === 1 ? 'title' : 'titles'}</span>}
         </div>
+
+        {catalogActionError && <p className="catalog-action-error" role="alert">{catalogActionError}</p>}
 
         <form className="catalog-filters" onSubmit={handleSearch}>
           <label className="catalog-search">
@@ -260,9 +333,14 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                     <div className="title-genres">
                       {title.genres.map((item) => <span key={item}>{item}</span>)}
                     </div>
-                    <button className="title-detail-button" type="button" onClick={() => void openTitle(title.id)}>
-                      View details <span aria-hidden="true">↗</span>
-                    </button>
+                    <div className="title-card-actions">
+                      <button className="title-detail-button" type="button" onClick={() => void openTitle(title.id)}>
+                        View details <span aria-hidden="true">↗</span>
+                      </button>
+                      {isAdmin && <button className="title-remove-button" type="button" disabled={archivingTitleId === title.id} onClick={() => void archiveTitle(title)}>
+                        {archivingTitleId === title.id ? 'Removing…' : 'Remove'}
+                      </button>}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -318,6 +396,48 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                 </div>
               </>
             )}
+          </section>
+        </div>
+      )}
+
+      {createOpen && isAdmin && (
+        <div className="detail-overlay" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !createPending) setCreateOpen(false);
+        }}>
+          <section className="title-detail-panel catalog-create-panel" role="dialog" aria-modal="true" aria-labelledby="create-title-heading">
+            <button className="detail-close" type="button" onClick={() => setCreateOpen(false)} aria-label="Close add-title form" disabled={createPending}>×</button>
+            <p className="eyebrow">CATALOGUE MANAGEMENT</p>
+            <h2 id="create-title-heading">Add a title.</h2>
+            <p className="detail-description">Add another playable title to your published catalogue. Use a direct public HTTP(S) video URL.</p>
+            <form className="catalog-create-form" onSubmit={(event) => void createTitle(event)}>
+              <label className="catalog-create-field" htmlFor="catalog-title-name">Title name
+                <input id="catalog-title-name" value={createName} onChange={(event) => setCreateName(event.currentTarget.value)} maxLength={200} required />
+              </label>
+              <label className="catalog-create-field" htmlFor="catalog-title-description">Description
+                <textarea id="catalog-title-description" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={2000} rows={3} />
+              </label>
+              <div className="catalog-create-row">
+                <label className="catalog-create-field" htmlFor="catalog-title-duration">Duration (seconds)
+                  <input id="catalog-title-duration" type="number" min="1" max="86400" step="1" value={createDurationSeconds} onChange={(event) => setCreateDurationSeconds(event.currentTarget.value)} required />
+                </label>
+                <label className="catalog-create-field" htmlFor="catalog-title-locale">Default language
+                  <input id="catalog-title-locale" value={createLocale} onChange={(event) => setCreateLocale(event.currentTarget.value)} maxLength={16} placeholder="en-IN" />
+                </label>
+              </div>
+              <label className="catalog-create-field" htmlFor="catalog-title-video">Video URL
+                <input id="catalog-title-video" type="url" value={createVideoUrl} onChange={(event) => setCreateVideoUrl(event.currentTarget.value)} placeholder="https://example.com/video.mp4" maxLength={2048} required />
+                <small>Use a direct media file URL that the browser can play, not a YouTube or streaming-page URL.</small>
+              </label>
+              <label className="catalog-create-field" htmlFor="catalog-title-genres">Genres (comma-separated)
+                <input id="catalog-title-genres" value={createGenres} onChange={(event) => setCreateGenres(event.currentTarget.value)} maxLength={500} placeholder="nature, documentary" />
+              </label>
+              <div className="catalog-create-actions">
+                <button className="catalog-clear-button" type="button" onClick={() => setCreateOpen(false)} disabled={createPending}>Cancel</button>
+                <button className="primary-button" type="submit" disabled={createPending || !createName.trim() || !createVideoUrl.trim()}>
+                  {createPending ? 'Adding…' : 'Create title'} <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       )}

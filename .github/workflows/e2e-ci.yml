@@ -113,6 +113,10 @@ jobs:
             -d "{\"email\":\"$E2E_HOST_EMAIL\",\"password\":\"$E2E_HOST_PASSWORD\",\"displayName\":\"E2E Host\"}" \
             http://127.0.0.1:8080/api/v1/auth/register)"
           host_user_id="$(printf '%s' "$registration" | jq -er '.userId')"
+          docker run --rm --network host -e PGPASSWORD="$DB_PASSWORD" postgres:17.11 \
+            psql -h 127.0.0.1 -U "$DB_USERNAME" -d aiws -v ON_ERROR_STOP=1 \
+            -c "UPDATE app_users SET system_role='ADMIN' WHERE id='$host_user_id'"
+
           echo "E2E_HOST_EMAIL=$E2E_HOST_EMAIL" >> "$GITHUB_ENV"
           echo "E2E_HOST_PASSWORD=$E2E_HOST_PASSWORD" >> "$GITHUB_ENV"
 

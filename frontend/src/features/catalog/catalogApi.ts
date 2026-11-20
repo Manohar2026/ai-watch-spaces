@@ -1,4 +1,4 @@
-import { authenticatedGet } from '../auth/api';
+import { authenticatedDelete, authenticatedGet, authenticatedPost } from '../auth/api';
 
 export interface PageResponse<T> {
   items: T[];
@@ -21,6 +21,15 @@ export interface TitleSummary {
 export interface TitleDetail extends TitleSummary {
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateTitleInput {
+  name: string;
+  description: string;
+  durationMs: number;
+  videoAssetUri: string;
+  defaultLocale: string;
+  genres: string[];
 }
 
 export interface CatalogFilters {
@@ -50,6 +59,14 @@ export const catalogApi = {
       `/titles?${buildQuery(filters)}`,
       accessToken,
     );
+  },
+
+  create(accessToken: string, input: CreateTitleInput): Promise<TitleDetail> {
+    return authenticatedPost<TitleDetail>('/admin/titles', accessToken, input);
+  },
+
+  archive(accessToken: string, titleId: string): Promise<void> {
+    return authenticatedDelete<void>(`/admin/titles/${encodeURIComponent(titleId)}`, accessToken);
   },
 
   get(accessToken: string, titleId: string): Promise<TitleDetail> {
