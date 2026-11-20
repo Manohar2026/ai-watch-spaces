@@ -25,7 +25,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Frontend F0:** full-stack architecture documented.
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
 - **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; automated Chromium registration/login journey passes; manual local-device verification remains pending.
-- **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
+- **Frontend F3:** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; automated Chromium catalogue verification passes; manual local-device verification remains pending.
 - **Frontend room (in progress):** create/join/lifecycle, follow host playback, send/read chat, and see online/away status. Frontend CI passes; browser-based verification against a running local backend is still pending.
 
 ## Current product scope
