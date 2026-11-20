@@ -73,7 +73,8 @@ class WatchSpaceMembershipIT {
                 .expectStatus().isOk()
                 .expectBody(Map.class).returnResult().getResponseBody();
 
-        assertThat(afterLeave).isNotNull().containsEntry("myRole", "NONE");
+        assertThat(afterLeave).isNotNull();
+        assertThat(afterLeave.get("myRole")).isEqualTo("NONE");
         Integer activeMemberships = jdbc.queryForObject("""
                 SELECT count(*) FROM watch_space_participants
                 WHERE watch_space_id = ? AND user_id = ? AND left_at IS NULL
