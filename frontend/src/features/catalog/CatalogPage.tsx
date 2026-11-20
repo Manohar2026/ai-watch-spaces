@@ -120,6 +120,12 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     setRoomError(null);
     try {
       const created = await authorized((token) => watchSpaceApi.create(token, titleId));
+      if (!created?.room?.watchSpaceId) {
+        throw new ApiError(502, {
+          code: 'INVALID_ROOM_RESPONSE',
+          message: 'The backend did not return the new room. Update and restart the backend, then try again.',
+        });
+      }
       onRoomEnter(created.room, created.inviteCode);
     } catch (createError) {
       setRoomError(friendlyError(createError));
@@ -209,6 +215,8 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
           {(appliedQuery || genre) && <button className="catalog-clear-button" type="button" onClick={clearFilters}>Clear</button>}
         </form>
 
+        {roomError && <p className="room-action-error catalog-room-error" role="alert">{roomError}</p>}
+
         {state === 'loading' && (
           <div className="catalog-state" role="status">
             <span className="loading-orbit" aria-hidden="true" />
@@ -253,9 +261,14 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                     <div className="title-genres">
                       {title.genres.map((item) => <span key={item}>{item}</span>)}
                     </div>
-                    <button className="title-detail-button" type="button" onClick={() => void openTitle(title.id)}>
-                      View details <span aria-hidden="true">↗</span>
-                    </button>
+                    <div className="title-card-actions">
+                      <button className="primary-button catalog-room-create" type="button" disabled={roomPending} onClick={() => void createWatchSpace(title.id)}>
+                        {roomPending ? 'Creating room…' : 'Create room'} <span aria-hidden="true">→</span>
+                      </button>
+                      <button className="title-detail-button" type="button" onClick={() => void openTitle(title.id)}>
+                        View details <span aria-hidden="true">↗</span>
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -287,6 +300,12 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                   <div><dt>Slug</dt><dd>{selectedTitle.slug}</dd></div>
                   <div><dt>Genres</dt><dd>{selectedTitle.genres.join(', ') || 'Not specified'}</dd></div>
                 </dl>
+                <div className="room-create-action">
+                  {roomError && <p className="room-action-error" role="alert">{roomError}</p>}
+                  <button className="primary-button catalog-room-create" type="button" disabled={roomPending} onClick={() => void createWatchSpace(selectedTitle.id)}>
+                    {roomPending ? 'Creating your space…' : 'Create a watch space'} <span aria-hidden="true">→</span>
+                  </button>
+                </div>
                 {(() => {
                   try {
                     const mediaUrl = new URL(selectedTitle.videoAssetUri);
@@ -296,19 +315,13 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                           <source src={mediaUrl.href} type="video/mp4" />
                           Your browser does not support this video. <a href={mediaUrl.href}>Open the sample clip</a>.
                         </video>
-                        <p className="detail-note">Preview the sample title here. Shared rooms and synchronized playback are the next step.</p>
+                        <p className="detail-note">Create a room to invite friends and watch this title together.</p>
                       </div>
                     ) : null;
                   } catch {
                     return null;
                   }
                 })()}
-                <div className="room-create-action">
-                  {roomError && <p className="room-action-error" role="alert">{roomError}</p>}
-                  <button className="primary-button catalog-room-create" type="button" disabled={roomPending} onClick={() => void createWatchSpace(selectedTitle.id)}>
-                    {roomPending ? 'Creating your space…' : 'Create a watch space'} <span aria-hidden="true">→</span>
-                  </button>
-                </div>
               </>
             )}
           </section>
