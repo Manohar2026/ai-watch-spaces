@@ -10,10 +10,10 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
   return (
     <main className="dashboard-shell">
       <header className="dashboard-topbar">
-        <a className="brand" href="/" aria-label="Watch Spaces home">
+        <div className="brand" aria-label="Watch Spaces">
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
-        </a>
+        </div>
         <button className="dashboard-logout" type="button" onClick={() => void logout()} disabled={isSubmitting}>
           Sign out
         </button>
