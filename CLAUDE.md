@@ -20,7 +20,7 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
 2. One Java/Spring Boot modular monolith. No microservices or separate deployables.
 3. Stack is pinned (SYSTEM_DESIGN ADR-002):
    - Java 21; Spring Boot **4.1.2** parent; Maven (wrapper).
-   - Spring WebFlux (REST + plain-JSON WebSockets, no STOMP).
+   - Spring WebFlux for REST APIs. The current MVP uses authenticated HTTP polling for room state, chat and presence; WebSocket transport is deferred.
    - Spring Security 7 with JWT via `spring-boot-starter-security-oauth2-resource-server` (Nimbus, HS256).
    - Spring Data JPA with **Hibernate 7**; PostgreSQL 17; `spring-boot-starter-flyway` **plus the mandatory `org.flywaydb:flyway-database-postgresql`** (BOM-managed version; M1-V2 verifies resolution and migrations against the PostgreSQL 17 image).
    - **Jackson 3 only** (`tools.jackson.*`): never add Jackson 2 `jackson-databind` or the deprecated `spring-boot-jackson2` module.
@@ -47,13 +47,13 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
 11. Timers never mutate room state directly; they submit commands to the room lane. LLM calls use reactive `WebClient`, are bounded and time-limited, and never run inside the room lane.
 
 ### Room mutations and persistence (ADR-005)
-12. Every durable room mutation — REST, WebSocket or timer — goes through that room's lane, in this order: **validate → persist and commit (with the `last_sequence_no` optimistic guard) → apply to in-memory state → broadcast**.
+12. Current MVP room mutations — REST and chat — go through the room's serialized lane, validate and commit room state plus the event ledger in PostgreSQL using the `last_sequence_no` optimistic guard. The API returns the committed snapshot and browser clients observe changes through authenticated polling. There is no separate in-memory authoritative room state or WebSocket broadcast in the MVP; that belongs to a future, separately approved realtime milestone.
     - On any failure, do not change memory and do not broadcast.
     - Never allocate sequence numbers with `MAX(sequence_no)+1`.
     - Read the injected `Clock` **once** per mutation, truncate to microseconds, and clamp so it is never earlier than the room's previous instant. Use that single `mutationInstant` for every timestamp the mutation writes (all `room_events.occurred_at`, `started_at`, `ended_at`, `joined_at`, `left_at`, …). `room_events.occurred_at` has no DB default and must always be supplied.
     - `ROOM_ENDED` is the room's final ledger event; reject any later append.
     - Analytics are computed only from the ledger in `sequence_no` order and must equal the oracle query in SYSTEM_DESIGN §9.4 exactly.
-13. Do not persist playback heartbeats, sync reports, typing, reactions or presence-quality updates. Persist the closed event-type catalog, chat, AI Q&A results/sources, votes, applications, interactions, ratings and end-of-session analytics.
+13. In the MVP, presence heartbeats update the active membership's `last_seen_at` timestamp but do not append room-ledger events. Do not persist playback heartbeats, sync reports, typing, reactions or connection-quality samples. Persist the closed event-type catalog and durable chat. AI Q&A results/sources, votes, applications, interactions, ratings and end-of-session analytics are deferred.
 14. Use integer milliseconds internally and on all WebSocket inputs. Seconds appear only in the timeline REST query parameters (`from`/`to`), the advisory `currentTs`, and read-only `…Seconds`/`ts` output companion fields. Convert at the boundary; never mix units.
 
 ### Security
@@ -65,7 +65,7 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
     - BCrypt strength 12 via `DelegatingPasswordEncoder` (≤ 72-byte passwords).
     - HS256 key ≥ 256 bits from the environment; access TTL ≤ 60 min (default 15).
     - Refresh-token rotation with family revocation on replay, committed before the 401 (guardrail 8a).
-    - HMAC-hashed invite codes; rate limits; WebSocket token renewal, close codes and slow-consumer policy.
+    - HMAC-hashed invite codes; rate limits; WebSocket token renewal, close codes and slow-consumer policy remain deferred until a separate realtime transport milestone.
 18. Never commit real secrets. `JWT_SIGNING_KEY`, `INVITE_CODE_PEPPER`, DB credentials and `LLM_API_KEY` come from environment variables; `.env.example` holds placeholders only. Never log passwords, tokens, invite codes or API keys.
 
 ### Deferred AI and variations
@@ -92,17 +92,15 @@ These features are part of the later product plan, not the current MVP. Keep mod
 - Keep the Postman collection, scripted WebSocket scenarios, seed data, migrations and docs synchronized with the implementation.
 - Check SYSTEM_DESIGN §17 (open decisions) before work that depends on them; ask the user rather than deciding silently.
 
-## Backend milestones M1–M7 (M3 currently authorized; M4+ require separate approval)
+## Backend milestones (current MVP sequencing)
 
 | # | Deliverable |
 |---|---|
-| M1 | Maven scaffold on Spring Boot 4.1.2 / Java 21, module packages, Docker Compose, configuration, DB executor, error envelope, correlation, logging, health; complete the M1-V1…V13 verification checklist and record resolved versions; blocking-boundary test; Jackson 3 JSONB round-trip |
-| M2 | Flyway V1 and authentication (register/login/refresh with committed replay revocation/logout, `/me`), including the three replay tests in SYSTEM_DESIGN §8.2 |
-| M3 | Flyway V2, timeline JSON Schema v1, seed title/timeline/subtitles, catalogue and timeline read endpoints; test that cues and assets of `APPROVED`/`ACTIVE` tracks are immutable (changes only as a new version) and that seeded assets match their checksums (R13) |
-| M4 | Flyway V3, room lane and ledger, create/join/leave/start/end, invites, lock, settings; capacity-race and ordering tests |
-| M5 | WebSocket handshake, snapshot, presence, reconnect grace, token renewal, close codes |
-| M6 | Playback commands with persist → apply → broadcast, tested with three scripted clients |
-| M7 | Sync ping/pong, drift correction, connection quality, measured joiner sync |
+| M1 | Maven scaffold on Spring Boot 4.1.2 / Java 21, configuration, DB executor, error envelope, correlation, logging, health and verified dependency versions |
+| M2 | Flyway V1 and authentication: register/login/refresh with committed replay revocation/logout and `/me` |
+| M3 | Flyway V2, timeline JSON Schema v1, sample title/timeline/subtitles, catalogue and timeline read APIs |
+| M4 | Room lifecycle and invite codes, server-authoritative playback, durable chat, heartbeat presence, and PostgreSQL integration tests |
+| M5 (deferred) | WebSocket transport, reconnect grace, connection quality and slow-consumer handling; requires a separately approved milestone |
+| Later | Timeline UI, subtitle variations, AI Q&A, recommendations, analytics and admin workflows |
 
-Do not begin chat, AI, variations, recommendations or analytics until M7 passes.
-
+The active MVP is the end-to-end non-AI journey. HTTP polling is the chosen first transport; do not reintroduce WebSocket transport without a separately reviewed milestone. Chat and heartbeat-based presence are in the current authorized scope. A milestone is not complete until CI passes and the documented browser/API verification is performed.

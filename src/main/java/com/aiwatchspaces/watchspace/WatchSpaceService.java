@@ -355,7 +355,7 @@ public class WatchSpaceService {
         Boolean result = jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM watch_spaces ws WHERE ws.id = :roomId AND ws.host_user_id = :userId)
                     OR EXISTS (SELECT 1 FROM watch_space_participants p
-                               WHERE p.watch_space_id = :roomId AND p.user_id = :userId)
+                               WHERE p.watch_space_id = :roomId AND p.user_id = :userId AND p.left_at IS NULL)
                 """, Map.of("roomId", roomId, "userId", userId), Boolean.class);
         return Boolean.TRUE.equals(result);
     }

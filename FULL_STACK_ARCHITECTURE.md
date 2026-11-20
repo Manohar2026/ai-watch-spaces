@@ -31,13 +31,13 @@ The application uses original/sample catalogue data and self-created or lawfully
 ```text
 Browser
   |
-  | HTTPS / JSON REST + WebSocket
+  | HTTPS / authenticated JSON REST (HTTP polling for MVP)
   v
 React + TypeScript (frontend/)
   |-- Pages and layouts
   |-- Feature modules
   |-- API client and auth state
-  |-- WebSocket client and realtime state
+  |-- Room, chat and presence polling state
   v
 Spring Boot 4.1.2 modular monolith (repository root)
   |-- auth / users
@@ -64,7 +64,7 @@ The frontend and backend are separate deployable applications, but they are deve
 | Routing | React Router (add when page navigation is implemented) |
 | Server state and caching | TanStack Query (add when API integration begins) |
 | HTTP | Shared typed API client; choose fetch or Axios during auth integration |
-| Realtime | Native browser WebSocket API behind a feature-level client |
+| Realtime | Authenticated HTTP polling for MVP; WebSocket transport is deferred |
 | Styling | Responsive CSS with reusable design tokens and components |
 | Tests | Vitest and React Testing Library; browser-level tests can be added when core flows stabilize |
 
@@ -75,7 +75,7 @@ Keep dependencies lean. Add a library only when a concrete feature needs it.
 Retain the current repository baseline:
 
 - Java 21 and Spring Boot 4.1.2.
-- WebFlux / Netty for HTTP and WebSocket endpoints.
+- WebFlux / Netty for REST endpoints. The current MVP uses authenticated HTTP polling; WebSocket transport is deferred.
 - Spring Security and the existing JWT authentication implementation.
 - Spring Data JPA / Hibernate with PostgreSQL 17.
 - Flyway for schema migrations.
@@ -143,7 +143,8 @@ The backend remains authoritative for permissions, room state, playback sequenci
 - The current M2 refresh endpoint accepts a refresh token in its request body. The browser integration must respect that contract until a separately reviewed security decision changes it.
 - Do not put access tokens or refresh tokens in source code, build-time public configuration, URLs, logs, or analytics events.
 - Avoid persistent browser storage for credentials by default. Before implementing session persistence, document and test the selected refresh-token handling and XSS/CSRF threat model; do not silently put refresh tokens in localStorage.
-- WebSocket authentication and browser-compatible credential transport must be confirmed against the backend design before the realtime UI is implemented. Do not assume browser WebSocket APIs can set arbitrary Authorization headers.
+- The current MVP uses authenticated HTTP polling: room snapshots approximately every 1.2 seconds, chat approximately every 1.6 seconds, and presence heartbeats every 10 seconds. See [docs/m4-watch-spaces.md](docs/m4-watch-spaces.md) for the API contract.
+- Do not add WebSocket endpoints or clients to the MVP. WebSocket authentication, reconnect, backpressure and token-renewal behavior belong to a later, separately planned transport upgrade.
 - Configure explicit development and production CORS/origin allowlists. Never use wildcard origins with credentials.
 - Map backend error envelopes into consistent user-facing states while retaining correlation IDs for debugging.
 
@@ -167,8 +168,8 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 | F2 | Authentication UI and API integration | Register/login/logout/current-user and in-memory automatic refresh code committed; end-to-end browser verification and persistent session-restoration design remain open |
 | F3 | App shell, dashboard and catalogue | Initial React catalogue UI consumes the published-title list/detail APIs; CI and local browser verification pending |
 | F4 | Watch-space lifecycle | Create, join, leave, start and end a room; share invite codes |
-| F5 | Synchronized player and realtime foundation | WebSocket connection, authoritative play/pause/seek, reconnect/resync |
-| F6 | Chat and presence | Ordered chat history, live messages, participant presence and reconnect state |
+| F5 | Synchronized player and realtime foundation | Server-authoritative play/pause/seek with room-snapshot polling and drift correction |
+| F6 | Chat and presence | Ordered chat history, message polling, participant presence and heartbeat expiry |
 | F7 | MVP polish and release | Responsive room UI, accessibility, security, setup and demo instructions |
 | Later | Timeline, subtitles, recommendations, analytics and AI integration | Add only after the non-AI watch-party path works end to end |
 
@@ -195,13 +196,13 @@ npm run typecheck
 npm run build
 ```
 
-The frontend development server uses port 5173 and proxies `/api` to `http://localhost:8080`. Exact WebSocket proxy paths will be added only after confirming the backend endpoint contract.
+The frontend development server uses port 5173 and proxies `/api` to `http://localhost:8080`. No WebSocket proxy paths are required by the current HTTP-polling MVP.
 
 ## 10. Scope and change control
 
 This direction adds a React web client to the existing backend project. It does not authorize changing the approved database model, backend API contract, authentication semantics, module boundaries, or PRD requirements without documenting and reviewing the change.
 
-The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Where it says the frontend/UI is out of scope, read that as the historical scope of the original backend-only track; this addendum supersedes that scope statement for the current full-stack project direction. Backend-specific technical constraints remain in force unless explicitly revised.
+The existing `SYSTEM_DESIGN.md` remains the detailed long-term backend design reference. Its WebSocket, in-memory room runtime and event-broadcast requirements describe the future realtime architecture; they are not implemented in the current MVP. For this MVP, PostgreSQL-backed REST polling is authoritative. Any move to WebSockets or a different room-state model requires an explicit design review and synchronized updates to the architecture, implementation and tests.
 
 ## 11. Immediate next step
 

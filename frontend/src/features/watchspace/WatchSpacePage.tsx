@@ -37,6 +37,7 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [chatPending, setChatPending] = useState(false);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const chatCursor = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isHost = room.myRole === 'HOST';
@@ -46,19 +47,27 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
     onRoomChange(updated);
     setSeekPosition(updated.playbackPositionMs);
     const video = videoRef.current;
-    if (!video || updated.status !== 'LIVE') return;
+    if (!video) return;
+    if (updated.status !== 'LIVE') {
+      video.pause();
+      setPlaybackBlocked(false);
+      return;
+    }
     const elapsedMs = updated.playbackState === 'PLAYING'
       ? Math.max(0, Date.now() - Date.parse(updated.playbackUpdatedAt)) : 0;
     const targetSeconds = Math.min(updated.durationMs, updated.playbackPositionMs + elapsedMs) / 1000;
     if (Math.abs(video.currentTime - targetSeconds) > 1.25) video.currentTime = targetSeconds;
-    if (updated.playbackState === 'PLAYING' && video.paused) void video.play().catch(() => undefined);
+    if (updated.playbackState === 'PLAYING' && targetSeconds < updated.durationMs / 1000 - 0.25 && video.paused) {
+      void video.play().then(() => setPlaybackBlocked(false)).catch(() => setPlaybackBlocked(true));
+    }
     if (updated.playbackState === 'PAUSED' && !video.paused) video.pause();
   }
 
   useEffect(() => {
+    if (room.status === 'ENDED') return;
     let inFlight = false;
     const timer = window.setInterval(async () => {
-      if (inFlight || document.visibilityState === 'hidden') return;
+      if (inFlight || document.visibilityState === 'hidden' || room.status === 'ENDED') return;
       inFlight = true;
       try {
         const latest = await authorized((token) => watchSpaceApi.get(token, initialRoom.watchSpaceId));
@@ -70,12 +79,13 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       }
     }, 1200);
     return () => window.clearInterval(timer);
-  }, [initialRoom.watchSpaceId]);
+  }, [initialRoom.watchSpaceId, room.status]);
 
   useEffect(() => {
+    if (room.status === 'ENDED') return;
     let inFlight = false;
     const heartbeat = async () => {
-      if (inFlight) return;
+      if (inFlight || room.status === 'ENDED') return;
       inFlight = true;
       try {
         await authorized((token) => watchSpaceApi.heartbeat(token, initialRoom.watchSpaceId));
@@ -88,9 +98,10 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
     heartbeat();
     const timer = window.setInterval(heartbeat, 10000);
     return () => window.clearInterval(timer);
-  }, [initialRoom.watchSpaceId]);
+  }, [initialRoom.watchSpaceId, room.status]);
 
   useEffect(() => {
+    if (room.status === 'ENDED') return;
     let inFlight = false;
     const timer = window.setInterval(async () => {
       if (inFlight || document.visibilityState === 'hidden' || room.status === 'ENDED') return;
@@ -125,6 +136,17 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       token = getAccessToken();
       if (!token) throw requestError;
       return operation(token);
+    }
+  }
+
+  async function enableSynchronizedPlayback() {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      await video.play();
+      setPlaybackBlocked(false);
+    } catch {
+      setPlaybackBlocked(true);
     }
   }
 
@@ -188,7 +210,20 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
         </a>
         <div className="room-top-actions">
           <button className="catalog-back-button" type="button" onClick={() => void refreshRoom()} disabled={pending}>Refresh room</button>
-          <button className="dashboard-logout" type="button" onClick={onExit}>Back to catalogue</button>
+          <button
+            className="dashboard-logout"
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              if (room.status === 'ENDED') {
+                onExit();
+              } else {
+                void runRoomAction((token) => watchSpaceApi.leave(token, room.watchSpaceId), true);
+              }
+            }}
+          >
+            {room.status === 'ENDED' ? 'Back to catalogue' : isHost ? 'End & return' : 'Leave room'}
+          </button>
         </div>
       </header>
 
@@ -208,19 +243,60 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
           <section className="room-main-card" aria-labelledby="lobby-title">
             {room.status === 'LIVE' && (
               <div className="shared-player">
-                <video ref={videoRef} className="shared-player-video" src={room.videoAssetUri} playsInline preload="metadata" />
+                <video
+                  ref={videoRef}
+                  className="shared-player-video"
+                  src={room.videoAssetUri}
+                  playsInline
+                  preload="metadata"
+                  onEnded={() => {
+                    if (isHost && room.status === 'LIVE') {
+                      void runRoomAction((token) =>
+                        watchSpaceApi.playback(token, room.watchSpaceId, 'PAUSED', room.durationMs));
+                    }
+                  }}
+                />
                 <div className="shared-player-controls">
                   {isHost ? (
                     <>
-                      <button className="primary-button" type="button" disabled={pending} onClick={() => void runRoomAction((token) => watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PAUSED' : 'PLAYING', Math.round((videoRef.current?.currentTime ?? 0) * 1000)))}>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={pending}
+                        onClick={() => {
+                          const nextState = room.playbackState === 'PLAYING' ? 'PAUSED' : 'PLAYING';
+                          const position = Math.round((videoRef.current?.currentTime ?? 0) * 1000);
+                          if (nextState === 'PLAYING') void enableSynchronizedPlayback();
+                          else videoRef.current?.pause();
+                          void runRoomAction((token) =>
+                            watchSpaceApi.playback(token, room.watchSpaceId, nextState, position));
+                        }}
+                      >
                         {room.playbackState === 'PLAYING' ? 'Pause for everyone' : 'Play for everyone'}
                       </button>
                       <label className="shared-player-seek">{formatDuration(Math.round(seekPosition / 1000) * 1000)}
-                        <input type="range" min={0} max={room.durationMs} step={1000} value={Math.min(seekPosition, room.durationMs)} onChange={(event) => setSeekPosition(Number(event.currentTarget.value))} onPointerUp={() => void runRoomAction((token) => watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))} aria-label="Seek shared playback" />
+                        <input
+                          type="range"
+                          min={0}
+                          max={room.durationMs}
+                          step={1000}
+                          value={Math.min(seekPosition, room.durationMs)}
+                          onChange={(event) => setSeekPosition(Number(event.currentTarget.value))}
+                          onPointerUp={() => void runRoomAction((token) =>
+                            watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))}
+                          onKeyUp={() => void runRoomAction((token) =>
+                            watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))}
+                          aria-label="Seek shared playback"
+                        />
                         {formatDuration(room.durationMs)}
                       </label>
                     </>
                   ) : <p>Following the host · {room.playbackState === 'PLAYING' ? 'Playing' : 'Paused'}</p>}
+                  {playbackBlocked && (
+                    <button className="room-secondary-action" type="button" onClick={() => void enableSynchronizedPlayback()}>
+                      Enable synchronized playback
+                    </button>
+                  )}
                 </div>
               </div>
             )}
