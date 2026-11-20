@@ -1,6 +1,6 @@
-# AI Watch Spaces
+# Watch Spaces
 
-AI Watch Spaces is a full-stack web application for synchronized social watch spaces with chat, interactive timeline content, AI-assisted Q&A, subtitle variations, recommendations, and analytics.
+Watch Spaces is a full-stack web application for discovering sample titles and watching together in synchronized rooms with chat and participant presence. AI-assisted features are planned for a later phase, after the core product works end to end.
 
 **Project direction:** Java full-stack application with a React frontend and Spring Boot backend.
 
@@ -25,6 +25,12 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
 - **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; browser verification against a local backend is pending.
 - **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
+
+## Current product scope
+
+The immediate product is a non-AI watch-party site. The first end-to-end target is account sign-in, catalogue browsing, creating or joining a watch space, synchronized playback of a sample title, live chat, and participant presence. Subtitle tracks, timeline interactions, recommendations, analytics, and AI features are deferred. AI will be added later as an integration layer on top of this working product.
+
+The first sample title, **The First Bloom**, uses a short public-domain flower video. It is suitable for local product demonstrations; use original or lawfully usable media for any additional titles.
 
 Backend verification results are recorded in [docs/m2-verification.md](docs/m2-verification.md). Those are repository-recorded results; run the commands below to verify the current checkout yourself.
 
@@ -68,3 +74,4 @@ The frontend includes integration code for the M2 authentication contract, inclu
 ## Product and data boundaries
 
 Netflix is a product inspiration only. This project does not integrate with Netflix infrastructure, accounts, catalogue, or user data. Use original/sample catalogue data and self-created or lawfully usable media assets.
+
