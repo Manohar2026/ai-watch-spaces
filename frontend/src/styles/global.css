@@ -343,7 +343,20 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 .room-avatar-1 { background: #524047; }
 .room-avatar-2 { background: #4a503b; }
 .room-avatar-3 { background: #3c465c; }
+.room-avatar-online { position: relative; }
+.room-avatar-online::after { position: absolute; right: -2px; bottom: -1px; width: 8px; height: 8px; border: 2px solid #111720; border-radius: 50%; background: #6bd49a; content: ''; }
+.room-avatar-offline { opacity: 0.62; }
 .room-person-name { overflow: hidden; color: #d6dce2; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-panel { display: flex; min-height: 290px; flex-direction: column; padding: 18px; }
+.chat-message-list { display: flex; flex: 1; flex-direction: column; gap: 13px; max-height: 310px; overflow-y: auto; margin: 18px 0; padding: 0; list-style: none; }
+.chat-message-list li { color: #c9d0d9; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.chat-message-list strong { color: #e8a06d; font-size: 10px; }
+.chat-message-list p { margin: 3px 0 0; white-space: pre-wrap; }
+.chat-message-list .chat-empty { margin: auto; color: #86919e; text-align: center; }
+.chat-compose { display: flex; gap: 7px; }
+.chat-compose input { min-width: 0; flex: 1; border: 1px solid #303a47; border-radius: 6px; background: #0b1017; padding: 10px; color: #f4f1eb; font: inherit; font-size: 11px; }
+.chat-compose button { border: 0; border-radius: 6px; background: #e29a66; padding: 0 12px; color: #1b1713; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
+.chat-compose button:disabled { cursor: default; opacity: 0.5; }
 .room-person-role { margin-left: auto; color: #7f8a97; font-size: 8px; letter-spacing: 0.7px; }
 .room-empty-people { color: #87919e; font-size: 10px; }
 .invite-panel > p:not(.eyebrow) { margin: 9px 0 16px; color: #929ba8; font-size: 10px; line-height: 1.65; }
