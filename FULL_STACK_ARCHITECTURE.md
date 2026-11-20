@@ -124,7 +124,7 @@ Organize frontend code by product feature rather than creating one large collect
 | `dashboard` | Recent and upcoming watch spaces, quick rejoin |
 | `watchspace` | Create/join room, room lifecycle, host and participant controls |
 | `player` | Media playback UI, authoritative playback state, drift display/correction |
-| `chat` | Persisted messages, reactions, typing and reconnect history |
+| `chat` | Persisted plain-text history and send; reactions and typing are deferred |
 | `timeline` | Deferred metadata foundation; no timeline UI in the first MVP |
 | `ai` | Later integration phase: grounded Q&A and source/citation presentation |
 | `variations` | Deferred subtitle alternatives and voting |
