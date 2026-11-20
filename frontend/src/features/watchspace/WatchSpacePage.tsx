@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDuration } from '../catalog/catalogApi';
@@ -33,7 +33,40 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [seekPosition, setSeekPosition] = useState(initialRoom.playbackPositionMs);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const isHost = room.myRole === 'HOST';
+
+  function applyRoom(updated: WatchSpace) {
+    setRoom(updated);
+    onRoomChange(updated);
+    setSeekPosition(updated.playbackPositionMs);
+    const video = videoRef.current;
+    if (!video || updated.status !== 'LIVE') return;
+    const elapsedMs = updated.playbackState === 'PLAYING'
+      ? Math.max(0, Date.now() - Date.parse(updated.playbackUpdatedAt)) : 0;
+    const targetSeconds = Math.min(updated.durationMs, updated.playbackPositionMs + elapsedMs) / 1000;
+    if (Math.abs(video.currentTime - targetSeconds) > 1.25) video.currentTime = targetSeconds;
+    if (updated.playbackState === 'PLAYING' && video.paused) void video.play().catch(() => undefined);
+    if (updated.playbackState === 'PAUSED' && !video.paused) video.pause();
+  }
+
+  useEffect(() => {
+    let inFlight = false;
+    const timer = window.setInterval(async () => {
+      if (inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      try {
+        const latest = await authorized((token) => watchSpaceApi.get(token, initialRoom.watchSpaceId));
+        applyRoom(latest);
+      } catch (pollError) {
+        if (pollError instanceof ApiError && pollError.status === 401) await logout();
+      } finally {
+        inFlight = false;
+      }
+    }, 1200);
+    return () => window.clearInterval(timer);
+  }, [initialRoom.watchSpaceId]);
 
   async function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
     let token = getAccessToken();
@@ -58,8 +91,7 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
     setError(null);
     try {
       const updated = await authorized(action);
-      setRoom(updated);
-      onRoomChange(updated);
+      applyRoom(updated);
       if (updated.status === 'ENDED' || exitAfter) onExit();
     } catch (actionError) {
       setError(errorMessage(actionError));
@@ -113,6 +145,24 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
 
         <div className="room-grid">
           <section className="room-main-card" aria-labelledby="lobby-title">
+            {room.status === 'LIVE' && (
+              <div className="shared-player">
+                <video ref={videoRef} className="shared-player-video" src={room.videoAssetUri} playsInline preload="metadata" />
+                <div className="shared-player-controls">
+                  {isHost ? (
+                    <>
+                      <button className="primary-button" type="button" disabled={pending} onClick={() => void runRoomAction((token) => watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PAUSED' : 'PLAYING', Math.round((videoRef.current?.currentTime ?? 0) * 1000)))}>
+                        {room.playbackState === 'PLAYING' ? 'Pause for everyone' : 'Play for everyone'}
+                      </button>
+                      <label className="shared-player-seek">{formatDuration(Math.round(seekPosition / 1000) * 1000)}
+                        <input type="range" min={0} max={room.durationMs} step={1000} value={Math.min(seekPosition, room.durationMs)} onChange={(event) => setSeekPosition(Number(event.currentTarget.value))} onPointerUp={() => void runRoomAction((token) => watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))} aria-label="Seek shared playback" />
+                        {formatDuration(room.durationMs)}
+                      </label>
+                    </>
+                  ) : <p>Following the host · {room.playbackState === 'PLAYING' ? 'Playing' : 'Paused'}</p>}
+                </div>
+              </div>
+            )}
             <div className="room-art" aria-hidden="true">
               <div className="room-art-sun" />
               <div className="room-art-horizon" />
@@ -126,12 +176,7 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
                   ? 'This room has ended. Return to the catalogue to start another watch space.'
                   : 'Share the invite code with friends. Room membership is saved, and the watch room will remember who has joined.'}
               </p>
-              {room.status === 'LIVE' && (
-                <div className="room-next-step">
-                  <span className="room-next-icon" aria-hidden="true">◷</span>
-                  <p>Playback synchronization, live chat, and online presence are the next room features.</p>
-                </div>
-              )}
+              {room.status === 'LIVE' && <div className="room-next-step"><span className="room-next-icon" aria-hidden="true">◷</span><p>The host controls shared playback. Chat and online presence are next.</p></div>}
               <div className="room-actions">
                 {isHost && room.status === 'SCHEDULED' && (
                   <button className="primary-button" type="button" disabled={pending} onClick={() => void runRoomAction((token) => watchSpaceApi.start(token, room.watchSpaceId))}>
