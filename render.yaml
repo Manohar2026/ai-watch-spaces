@@ -31,6 +31,8 @@ services:
           property: password
       - key: DB_POOL_SIZE
         value: "5"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=65.0 -XX:InitialRAMPercentage=20.0"
       - key: JWT_SIGNING_KEY
         generateValue: true
       - key: JWT_ISSUER
