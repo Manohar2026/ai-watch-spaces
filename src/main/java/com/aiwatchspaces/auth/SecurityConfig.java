@@ -60,6 +60,7 @@ class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness",
                                 "/actuator/health/readiness", "/actuator/info").permitAll()
                         .pathMatchers(HttpMethod.POST, PUBLIC_AUTH_PATHS).permitAll()
+                        .pathMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .pathMatchers("/actuator/**").hasRole("ADMIN")
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer

@@ -63,6 +63,7 @@ test('two people can register, create and join a room, sync playback, chat, and 
     // A second user completes registration in the browser and joins with the invite code.
     await registerThroughUi(guestPage, 'E2E Guest', guestEmail, guestPassword);
     await browseCatalogue(guestPage);
+    await expect(guestPage.getByRole('button', { name: 'Add title' })).toHaveCount(0);
     await guestPage.getByRole('button', { name: 'Join a space' }).click();
     await guestPage.getByLabel('Invite code').fill(inviteCode!);
     await guestPage.getByRole('button', { name: 'Join space' }).click();
@@ -119,4 +120,36 @@ test('catalogue genre filter waits for search submission', async ({ page }) => {
   await page.getByRole('button', { name: /Search/ }).click();
   await expect.poll(() => titleRequests.length).toBe(initialRequestCount + 1);
   expect(titleRequests.at(-1)).toContain('genre=nature');
+});
+
+
+test('admin can add multiple catalogue titles and remove one safely', async ({ page }) => {
+  await signIn(page, hostEmail, hostPassword);
+  await browseCatalogue(page);
+  await expect(page.getByRole('button', { name: 'Add title' })).toBeVisible();
+
+  async function addTitle(name: string) {
+    await page.getByRole('button', { name: 'Add title' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add a title.' });
+    await dialog.getByLabel('Title name').fill(name);
+    await dialog.getByLabel('Description').fill('Added by the catalogue management browser test.');
+    await dialog.getByLabel('Duration (seconds)').fill('30');
+    await dialog.getByLabel('Default language').fill('en-IN');
+    await dialog.getByLabel('Video URL').fill('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4');
+    await dialog.getByLabel('Genres (comma-separated)').fill('test, nature');
+    await dialog.getByRole('button', { name: 'Create title' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  }
+
+  const firstTitle = `Admin Added One ${Date.now()}`;
+  const secondTitle = `Admin Added Two ${Date.now()}`;
+  await addTitle(firstTitle);
+  await addTitle(secondTitle);
+
+  const firstCard = page.locator('.title-card').filter({ hasText: firstTitle });
+  page.once('dialog', async (dialog) => dialog.accept());
+  await firstCard.getByRole('button', { name: 'Remove' }).click();
+  await expect(firstCard).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: secondTitle, exact: true })).toBeVisible();
 });

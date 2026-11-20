@@ -98,6 +98,14 @@ export function authenticatedPost<T>(path: string, accessToken: string, body?: u
   });
 }
 
+/** Typed DELETE helper for authenticated write APIs. */
+export function authenticatedDelete<T>(path: string, accessToken: string): Promise<T> {
+  return request<T>(path, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 export const authApi = {
   register(email: string, password: string, displayName: string): Promise<RegisterResponse> {
     return request<RegisterResponse>('/auth/register', {

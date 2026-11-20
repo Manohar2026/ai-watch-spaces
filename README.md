@@ -36,6 +36,22 @@ The first sample title, **The First Bloom**, uses a short public-domain flower v
 
 Backend verification results are recorded in [docs/m2-verification.md](docs/m2-verification.md). Those are repository-recorded results; run the commands below to verify the current checkout yourself.
 
+## Catalogue management
+
+Catalogue titles can be created and archived by an administrator from the catalogue screen. New accounts are created with the `USER` role; there is no public admin registration flow.
+
+For local development, promote the account you intend to use for catalogue management, replacing the email with the address used at registration (and `aiws` with the database name/user from `.env` when different):
+
+```bash
+docker compose exec -T postgres psql -U aiws -d aiws -c "UPDATE app_users SET system_role = 'ADMIN' WHERE normalized_email = lower('you@example.com');"
+```
+
+Sign out and sign in again after promotion so the new access token carries the administrator role. The catalogue then shows **Add title** and **Remove** controls.
+
+A title requires a name, duration in seconds, default language, optional description and comma-separated genres, plus a direct public HTTP(S) media-file URL supported by the browser (for example MP4/WebM). A YouTube page URL is not a direct media URL, and the current form does not upload video files.
+
+Removing a title archives it instead of physically deleting its database row. Archived titles disappear from the published catalogue, while existing room records and historical references remain intact.
+
 ## Requirements
 
 - JDK 21 (the Maven enforcer rejects other versions).
