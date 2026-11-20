@@ -5,6 +5,7 @@ export interface RoomParticipant {
   displayName: string;
   roomRole: 'HOST' | 'VIEWER';
   online: boolean;
+  muted: boolean;
 }
 
 export interface ChatMessage {
@@ -69,6 +70,21 @@ export const watchSpaceApi = {
 
   leave(accessToken: string, roomId: string): Promise<WatchSpace> {
     return authenticatedPost<WatchSpace>(`/watch-spaces/${encodeURIComponent(roomId)}/leave`, accessToken);
+  },
+
+  muteParticipant(accessToken: string, roomId: string, participantId: string): Promise<WatchSpace> {
+    return authenticatedPost<WatchSpace>(
+      `/watch-spaces/${encodeURIComponent(roomId)}/participants/${encodeURIComponent(participantId)}/mute`, accessToken);
+  },
+
+  unmuteParticipant(accessToken: string, roomId: string, participantId: string): Promise<WatchSpace> {
+    return authenticatedPost<WatchSpace>(
+      `/watch-spaces/${encodeURIComponent(roomId)}/participants/${encodeURIComponent(participantId)}/unmute`, accessToken);
+  },
+
+  removeParticipant(accessToken: string, roomId: string, participantId: string): Promise<WatchSpace> {
+    return authenticatedPost<WatchSpace>(
+      `/watch-spaces/${encodeURIComponent(roomId)}/participants/${encodeURIComponent(participantId)}/remove`, accessToken);
   },
 
   playback(accessToken: string, roomId: string, playbackState: 'PLAYING' | 'PAUSED', positionMs: number): Promise<WatchSpace> {
