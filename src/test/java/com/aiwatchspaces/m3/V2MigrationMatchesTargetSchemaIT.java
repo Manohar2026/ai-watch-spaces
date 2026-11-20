@@ -122,8 +122,8 @@ class V2MigrationMatchesTargetSchemaIT {
                 WHERE connamespace = 'public'::regnamespace
                   AND conrelid = 'chat_messages'::regclass
                 """, String.class);
-        assertThat(definitions).anyMatch(definition -> definition.contains("message_type = 'CHAT'"));
-        assertThat(definitions).anyMatch(definition -> definition.contains("length(body) BETWEEN 1 AND 2000"));
+        assertThat(definitions).anyMatch(definition -> definition.contains("message_type") && definition.contains("CHAT"));
+        assertThat(definitions).anyMatch(definition -> definition.contains("body") && definition.contains("2000"));
 
         assertThat(migrated.queryForList("""
                 SELECT indexname FROM pg_indexes

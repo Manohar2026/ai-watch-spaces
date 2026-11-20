@@ -482,6 +482,7 @@ CREATE TABLE chat_messages (
     CHECK (message_type NOT IN ('AI_QUESTION', 'AI_ANSWER') OR ai_question_id IS NOT NULL),
     CHECK (message_type <> 'CHAT' OR user_id IS NOT NULL)
 );
+CREATE INDEX ix_chat_messages_room_created ON chat_messages(watch_space_id, created_at DESC, id DESC);
 CREATE INDEX ix_chat_messages_ai_question ON chat_messages(ai_question_id);
 
 
