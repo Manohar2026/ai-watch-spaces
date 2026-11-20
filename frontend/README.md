@@ -45,10 +45,11 @@ npm run preview
 - Typed API error handling using the backend error envelope.
 - Authenticated catalogue browsing with search, genre filtering, pagination, and title details.
 - Inline playback preview for the published sample title.
+- Create or join a watch space, view the room lobby and participants, and start or end the room.
 
 Tokens are kept in React memory only. Access tokens are refreshed automatically while the tab remains open; reloading the tab still loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
 
-The first product milestone is a normal non-AI watch-party experience: browse a title, create or join a room, watch in sync, and use chat and participant presence. Shared rooms are the next implementation step. Subtitles, timeline interactions, recommendations, analytics, and AI features are deferred until this core path is usable. AI will be integrated later against the working APIs.
+The first product milestone is a normal non-AI watch-party experience: browse a title, create or join a room, watch in sync, and use chat and participant presence. Room create/join/lifecycle are being implemented; synchronized playback, chat, and online presence follow. Subtitles, timeline interactions, recommendations, analytics, and AI features are deferred until this core path is usable. AI will be integrated later against the working APIs.
 
 The frontend CI has passed dependency installation, `npm run typecheck`, and `npm run build` for the existing implementation. The auth and catalogue flows have not yet been verified end-to-end against a locally running backend.
 
