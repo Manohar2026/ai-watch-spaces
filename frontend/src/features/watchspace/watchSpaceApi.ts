@@ -4,6 +4,16 @@ export interface RoomParticipant {
   userId: string;
   displayName: string;
   roomRole: 'HOST' | 'VIEWER';
+  online: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  displayName: string;
+  body: string;
+  sequenceNo: number;
+  createdAt: string;
 }
 
 export interface WatchSpace {
@@ -63,6 +73,18 @@ export const watchSpaceApi = {
 
   playback(accessToken: string, roomId: string, playbackState: 'PLAYING' | 'PAUSED', positionMs: number): Promise<WatchSpace> {
     return authenticatedPost<WatchSpace>(`/watch-spaces/${encodeURIComponent(roomId)}/playback`, accessToken, { playbackState, positionMs });
+  },
+
+  heartbeat(accessToken: string, roomId: string): Promise<void> {
+    return authenticatedPost<void>(`/watch-spaces/${encodeURIComponent(roomId)}/heartbeat`, accessToken);
+  },
+
+  chatHistory(accessToken: string, roomId: string, afterSequence: number): Promise<ChatMessage[]> {
+    return authenticatedGet(`/watch-spaces/${encodeURIComponent(roomId)}/chat?afterSequence=${afterSequence}&limit=50`, accessToken);
+  },
+
+  sendChat(accessToken: string, roomId: string, body: string): Promise<ChatMessage> {
+    return authenticatedPost<ChatMessage>(`/watch-spaces/${encodeURIComponent(roomId)}/chat`, accessToken, { body });
   },
 };
 
