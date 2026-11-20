@@ -127,7 +127,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
   return (
     <main className="catalog-shell">
       <header className="catalog-topbar">
-        <a className="brand" href="/" aria-label="AI Watch Spaces home">
+        <a className="brand" href="/" aria-label="Watch Spaces home">
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
@@ -247,7 +247,6 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
                 <p className="detail-description">{selectedTitle.description || 'No description has been added yet.'}</p>
                 <dl className="detail-metadata">
                   <div><dt>Duration</dt><dd>{formatDuration(selectedTitle.durationMs)}</dd></div>
-                  <div><dt>Default subtitles</dt><dd>{selectedTitle.defaultLocale}</dd></div>
                   <div><dt>Slug</dt><dd>{selectedTitle.slug}</dd></div>
                   <div><dt>Genres</dt><dd>{selectedTitle.genres.join(', ') || 'Not specified'}</dd></div>
                 </dl>
@@ -255,15 +254,18 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
                   try {
                     const mediaUrl = new URL(selectedTitle.videoAssetUri);
                     return (mediaUrl.protocol === 'https:' || mediaUrl.protocol === 'http:') ? (
-                      <a className="detail-asset-link" href={mediaUrl.href} target="_blank" rel="noreferrer">
-                        Open sample media <span aria-hidden="true">↗</span>
-                      </a>
+                      <div className="sample-player-wrap">
+                        <video className="sample-player" controls playsInline preload="metadata" aria-label={`Preview ${selectedTitle.name}`}>
+                          <source src={mediaUrl.href} type="video/mp4" />
+                          Your browser does not support this video. <a href={mediaUrl.href}>Open the sample clip</a>.
+                        </video>
+                        <p className="detail-note">Preview the sample title here. Shared rooms and synchronized playback are the next step.</p>
+                      </div>
                     ) : null;
                   } catch {
                     return null;
                   }
                 })()}
-                <p className="detail-note">This title is available in the catalogue. Watch-space creation and synchronized playback will be added in a later milestone.</p>
               </>
             )}
           </section>
@@ -272,3 +274,4 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     </main>
   );
 }
+
