@@ -302,7 +302,7 @@ public class WatchSpaceService {
                 WHERE p.watch_space_id = :roomId AND p.left_at IS NULL
                 ORDER BY p.joined_at, u.id
                 """, Map.of("roomId", roomId, "hostId", room.hostUserId(),
-                        "presenceCutoff", mutationInstant().minusSeconds(PRESENCE_WINDOW_SECONDS)),
+                        "presenceCutoff", Timestamp.from(mutationInstant().minusSeconds(PRESENCE_WINDOW_SECONDS))),
                 (rs, rowNum) -> new RoomParticipantResponse(rs.getObject("id", UUID.class),
                         rs.getString("display_name"), rs.getString("room_role"), rs.getBoolean("online")));
         return new RoomResponse(room.id(), room.titleId(), room.titleName(), room.videoAssetUri(), room.durationMs(),
