@@ -74,7 +74,17 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
 
   useEffect(() => {
     let inFlight = false;
-    const heartbeat = () => void authorized((token) => watchSpaceApi.heartbeat(token, initialRoom.watchSpaceId)).catch(() => undefined);
+    const heartbeat = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        await authorized((token) => watchSpaceApi.heartbeat(token, initialRoom.watchSpaceId));
+      } catch {
+        // Keep presence polling alive; the next heartbeat retries.
+      } finally {
+        inFlight = false;
+      }
+    };
     heartbeat();
     const timer = window.setInterval(heartbeat, 10000);
     return () => window.clearInterval(timer);
