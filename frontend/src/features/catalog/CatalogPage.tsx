@@ -47,6 +47,17 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [roomPending, setRoomPending] = useState(false);
+  const [createTitleOpen, setCreateTitleOpen] = useState(false);
+  const [createTitlePending, setCreateTitlePending] = useState(false);
+  const [createTitleError, setCreateTitleError] = useState<string | null>(null);
+  const [catalogNotice, setCatalogNotice] = useState<string | null>(null);
+  const [titleDraft, setTitleDraft] = useState({
+    name: '',
+    description: '',
+    videoAssetUri: '',
+    durationSeconds: '',
+    genres: '',
+  });
 
   async function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
     let token = getAccessToken();
@@ -134,6 +145,40 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     }
   }
 
+  async function createCatalogTitle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreateTitleError(null);
+    setCatalogNotice(null);
+    const durationSeconds = Number(titleDraft.durationSeconds);
+    if (!Number.isInteger(durationSeconds) || durationSeconds < 1 || durationSeconds > 86400) {
+      setCreateTitleError('Enter a duration from 1 second to 24 hours.');
+      return;
+    }
+    setCreateTitlePending(true);
+    try {
+      const title = await authorized((token) => catalogApi.create(token, {
+        name: titleDraft.name,
+        description: titleDraft.description,
+        videoAssetUri: titleDraft.videoAssetUri,
+        durationSeconds,
+        genres: titleDraft.genres.split(',').map((item) => item.trim()).filter(Boolean),
+      }));
+      setCreateTitleOpen(false);
+      setTitleDraft({ name: '', description: '', videoAssetUri: '', durationSeconds: '', genres: '' });
+      setQuery('');
+      setAppliedQuery('');
+      setGenre('');
+      setPage(0);
+      setReloadVersion((current) => current + 1);
+      setCatalogNotice(`“${title.name}” was added to the catalogue.`);
+    } catch (createError) {
+      setCreateTitleError(friendlyError(createError));
+      if (createError instanceof ApiError && createError.status === 401) await logout();
+    } finally {
+      setCreateTitlePending(false);
+    }
+  }
+
   async function joinWatchSpace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setJoinError(null);
@@ -188,7 +233,10 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
             <h1 id="catalog-title">Explore the <span>catalogue.</span></h1>
             <p>Browse the titles available in Watch Spaces and choose something to experience together.</p>
           </div>
-          {result && <span className="catalog-count">{result.totalElements} {result.totalElements === 1 ? 'title' : 'titles'}</span>}
+          <div className="catalog-heading-actions">
+            {result && <span className="catalog-count">{result.totalElements} {result.totalElements === 1 ? 'title' : 'titles'}</span>}
+            <button className="primary-button catalog-add-title" type="button" onClick={() => { setCreateTitleError(null); setCreateTitleOpen(true); }}>+ Add a title</button>
+          </div>
         </div>
 
         <form className="catalog-filters" onSubmit={handleSearch}>
@@ -216,6 +264,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
         </form>
 
         {roomError && <p className="room-action-error catalog-room-error" role="alert">{roomError}</p>}
+        {catalogNotice && <p className="catalog-notice" role="status">{catalogNotice}</p>}
 
         {state === 'loading' && (
           <div className="catalog-state" role="status">
@@ -344,6 +393,30 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
               <button className="primary-button" type="submit" disabled={roomPending || inviteCode.trim().length < 10}>
                 {roomPending ? 'Joining…' : 'Join space'} <span aria-hidden="true">→</span>
               </button>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {createTitleOpen && (
+        <div className="detail-overlay" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !createTitlePending) setCreateTitleOpen(false);
+        }}>
+          <section className="title-detail-panel add-title-panel" role="dialog" aria-modal="true" aria-labelledby="add-title-heading">
+            <button className="detail-close" type="button" onClick={() => setCreateTitleOpen(false)} aria-label="Close add title form">×</button>
+            <p className="eyebrow">GROW THE CATALOGUE</p>
+            <h2 id="add-title-heading">Add a title.</h2>
+            <p className="detail-description">Add a direct video URL and basic details. The title will be available to everyone using this catalogue.</p>
+            <form className="add-title-form" onSubmit={(event) => void createCatalogTitle(event)}>
+              <label>Title name<input required maxLength={200} value={titleDraft.name} onChange={(event) => setTitleDraft((current) => ({ ...current, name: event.currentTarget.value }))} placeholder="e.g. The First Bloom" /></label>
+              <label>Description<textarea maxLength={5000} rows={3} value={titleDraft.description} onChange={(event) => setTitleDraft((current) => ({ ...current, description: event.currentTarget.value }))} placeholder="What is this video about?" /></label>
+              <label>Direct video URL<input required type="url" maxLength={2000} value={titleDraft.videoAssetUri} onChange={(event) => setTitleDraft((current) => ({ ...current, videoAssetUri: event.currentTarget.value }))} placeholder="https://example.com/video.mp4" /></label>
+              <div className="add-title-form-row">
+                <label>Duration (seconds)<input required type="number" min={1} max={86400} step={1} value={titleDraft.durationSeconds} onChange={(event) => setTitleDraft((current) => ({ ...current, durationSeconds: event.currentTarget.value }))} placeholder="120" /></label>
+                <label>Genres<input maxLength={800} value={titleDraft.genres} onChange={(event) => setTitleDraft((current) => ({ ...current, genres: event.currentTarget.value }))} placeholder="nature, comedy" /></label>
+              </div>
+              {createTitleError && <p className="room-action-error" role="alert">{createTitleError}</p>}
+              <button className="primary-button" type="submit" disabled={createTitlePending}>{createTitlePending ? 'Adding title…' : 'Add to catalogue'} <span aria-hidden="true">→</span></button>
             </form>
           </section>
         </div>
