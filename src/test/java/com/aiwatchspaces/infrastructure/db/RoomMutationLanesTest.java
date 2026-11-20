@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 class RoomMutationLanesTest {
 
     @Test
-    void emptyMutationCompletesItsRequestAndReleasesTheNextMutation() {
+    void emptyMutationCompletesItsRequestAndReleasesTheNextMutation() throws Exception {
         try (DbExecutor db = new DbExecutor(1, 16)) {
             RoomMutationLanes lanes = new RoomMutationLanes(db);
             UUID roomId = UUID.randomUUID();
