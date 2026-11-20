@@ -1,4 +1,4 @@
-import { authenticatedGet } from '../auth/api';
+import { authenticatedGet, authenticatedPost } from '../auth/api';
 
 export interface PageResponse<T> {
   items: T[];
@@ -30,6 +30,14 @@ export interface CatalogFilters {
   genre?: string;
 }
 
+export interface CreateTitleInput {
+  name: string;
+  description: string;
+  videoAssetUri: string;
+  durationSeconds: number;
+  genres: string[];
+}
+
 function buildQuery(filters: CatalogFilters): string {
   const params = new URLSearchParams({
     page: String(filters.page),
@@ -55,6 +63,10 @@ export const catalogApi = {
   get(accessToken: string, titleId: string): Promise<TitleDetail> {
     return authenticatedGet<TitleDetail>(`/titles/${encodeURIComponent(titleId)}`, accessToken);
   },
+
+  create(accessToken: string, title: CreateTitleInput): Promise<TitleDetail> {
+    return authenticatedPost<TitleDetail>('/titles', accessToken, title);
+  },
 };
 
 export function formatDuration(durationMs: number): string {
@@ -63,3 +75,4 @@ export function formatDuration(durationMs: number): string {
   const seconds = totalSeconds % 60;
   return minutes > 0 ? `${minutes} min${seconds > 0 ? ` ${seconds} sec` : ''}` : `${seconds} sec`;
 }
+
