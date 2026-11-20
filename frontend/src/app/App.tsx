@@ -44,7 +44,7 @@ function AppContent() {
   return (
     <main className="page-shell">
       <nav className="topbar" aria-label="Main navigation">
-        <a className="brand" href="/" aria-label="AI Watch Spaces home">
+        <a className="brand" href="/" aria-label="Watch Spaces home">
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
@@ -61,7 +61,7 @@ function AppContent() {
           <h1 id="hero-title">Some stories are<br />better <span>together.</span></h1>
           <p className="hero-description">
             Bring your people into one watch space. Stay in sync, share reactions,
-            and discover more about every moment.
+            and enjoy the story together.
           </p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={() => setView('register')}>
@@ -99,7 +99,7 @@ function AppContent() {
 
       <section className="feature-section" id="how-it-works" aria-labelledby="feature-title">
         <div className="section-heading">
-          <p className="eyebrow">MORE THAN PRESSING PLAY</p>
+          <p className="eyebrow">BETTER TOGETHER</p>
           <h2 id="feature-title">A space for every kind of fan.</h2>
         </div>
         <div className="feature-grid">
@@ -115,8 +115,8 @@ function AppContent() {
           </article>
           <article className="feature-card">
             <span className="feature-number">03</span>
-            <h3>Go beyond the screen</h3>
-            <p>Explore contextual facts, interactive trivia, and AI-assisted answers.</p>
+            <h3>See who's here</h3>
+            <p>Keep your friends close with room presence and a shared conversation.</p>
           </article>
         </div>
       </section>
@@ -138,3 +138,4 @@ function App() {
 }
 
 export default App;
+
