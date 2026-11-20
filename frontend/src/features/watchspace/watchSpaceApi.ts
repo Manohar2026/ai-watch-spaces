@@ -60,5 +60,9 @@ export const watchSpaceApi = {
   leave(accessToken: string, roomId: string): Promise<WatchSpace> {
     return authenticatedPost<WatchSpace>(`/watch-spaces/${encodeURIComponent(roomId)}/leave`, accessToken);
   },
+
+  playback(accessToken: string, roomId: string, playbackState: 'PLAYING' | 'PAUSED', positionMs: number): Promise<WatchSpace> {
+    return authenticatedPost<WatchSpace>(`/watch-spaces/${encodeURIComponent(roomId)}/playback`, accessToken, { playbackState, positionMs });
+  },
 };
 
