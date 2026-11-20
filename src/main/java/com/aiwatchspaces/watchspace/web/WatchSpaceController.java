@@ -86,6 +86,15 @@ class WatchSpaceController {
         return lanes.submit(watchSpaceId, () -> rooms.end(watchSpaceId, actor));
     }
 
+    @PostMapping("/{watchSpaceId}/heartbeat")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    Mono<Void> heartbeat(@PathVariable UUID watchSpaceId, AuthenticatedUser actor) {
+        return lanes.submit(watchSpaceId, () -> {
+            rooms.heartbeat(watchSpaceId, actor);
+            return (Void) null;
+        });
+    }
+
     @PostMapping("/{watchSpaceId}/playback")
     Mono<RoomResponse> playback(@PathVariable UUID watchSpaceId, @Valid @RequestBody PlaybackRequest request,
                                 AuthenticatedUser actor) {
