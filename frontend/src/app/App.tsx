@@ -3,23 +3,52 @@ import { AuthProvider, useAuth } from '../features/auth/AuthProvider';
 import { AuthScreen } from '../features/auth/AuthScreen';
 import { Dashboard } from '../features/dashboard/Dashboard';
 import { CatalogPage } from '../features/catalog/CatalogPage';
+import { WatchSpacePage } from '../features/watchspace/WatchSpacePage';
+import type { WatchSpace } from '../features/watchspace/watchSpaceApi';
 
-type View = 'home' | 'login' | 'register' | 'catalog';
+type View = 'home' | 'login' | 'register' | 'catalog' | 'room';
 
 function AppContent() {
   const [view, setView] = useState<View>('home');
   const [authNotice, setAuthNotice] = useState<string | undefined>();
+  const [activeRoom, setActiveRoom] = useState<WatchSpace | null>(null);
+  const [roomInviteCode, setRoomInviteCode] = useState<string | undefined>();
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user && view === 'catalog') {
+    if (!user && (view === 'catalog' || view === 'room')) {
+      setActiveRoom(null);
+      setRoomInviteCode(undefined);
       setView('home');
     }
   }, [user, view]);
 
   if (user) {
+    if (view === 'room' && activeRoom) {
+      return (
+        <WatchSpacePage
+          initialRoom={activeRoom}
+          inviteCode={roomInviteCode}
+          onRoomChange={setActiveRoom}
+          onExit={() => {
+            setActiveRoom(null);
+            setRoomInviteCode(undefined);
+            setView('catalog');
+          }}
+        />
+      );
+    }
     if (view === 'catalog') {
-      return <CatalogPage onBack={() => setView('home')} />;
+      return (
+        <CatalogPage
+          onBack={() => setView('home')}
+          onRoomEnter={(room, code) => {
+            setActiveRoom(room);
+            setRoomInviteCode(code);
+            setView('room');
+          }}
+        />
+      );
     }
     return <Dashboard onBrowseCatalog={() => setView('catalog')} />;
   }
