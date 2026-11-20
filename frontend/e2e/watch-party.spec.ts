@@ -72,7 +72,7 @@ test('two people can register, create and join a room, sync playback, chat, and 
 
     // Host starts the room and changes the authoritative playback state.
     await hostPage.getByRole('button', { name: 'Start the room' }).click();
-    await expect(hostPage.getByText('ROOM IS LIVE')).toBeVisible();
+    await expect(hostPage.getByText('ROOM IS LIVE', { exact: true })).toBeVisible();
     await expect(guestPage.getByText('Following the host · Paused')).toBeVisible();
 
     await hostPage.getByRole('button', { name: 'Play for everyone' }).click();
