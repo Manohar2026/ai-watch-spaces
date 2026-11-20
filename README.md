@@ -71,7 +71,7 @@ npm run dev
 
 Open http://localhost:5173. The Vite development server proxies `/api/*` to the backend at http://localhost:8080. Run `npm run typecheck` and `npm run build` to verify the frontend. See [frontend/README.md](frontend/README.md) for details.
 
-The frontend includes integration code for the M2 authentication contract, including timed access-token refresh using refresh-token rotation. GitHub Actions has passed the frontend typecheck and production build. The browser flow has not yet been run end-to-end against a local backend, so verify it before treating F2 as complete. See [docs/frontend-auth.md](docs/frontend-auth.md) for the exact contract and token-handling limitations.
+The frontend includes integration code for the M2 authentication contract, including timed access-token refresh using refresh-token rotation. GitHub Actions has passed the frontend typecheck and production build. The automated browser flow now runs against a real Spring Boot process and PostgreSQL service in CI. It does not yet replace manual verification of media playback on separate devices or local Compose setup. See [docs/frontend-auth.md](docs/frontend-auth.md) for the exact contract and token-handling limitations.
 
 ## Product and data boundaries
 
