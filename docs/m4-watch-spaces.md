@@ -13,14 +13,17 @@ All routes require a valid bearer access token.
 | `POST /api/v1/watch-spaces/{id}/join` | Join by room link for a `PUBLIC_LINK` room; the invite code is optional for public-link rooms and required for invite-only rooms. |
 | `GET /api/v1/watch-spaces/{id}` | Read room and active membership details. Room members can read the room. |
 | `POST /api/v1/watch-spaces/{id}/start` | Host starts a scheduled room. This does not require a current timeline or subtitle track. |
-| `POST /api/v1/watch-spaces/{id}/end` | Host ends a room and closes active memberships. |
+| `POST /api/v1/watch-spaces/{id}/end` | Host ends a room and closes active memberships. Viewers who were present can read the terminal `ENDED` state on the next room poll, then return to the catalogue. |
+| `POST /api/v1/watch-spaces/{id}/participants/{userId}/mute` | Host mutes this participant's room chat. Playback and message reading remain available. |
+| `POST /api/v1/watch-spaces/{id}/participants/{userId}/unmute` | Host restores this participant's ability to send chat messages. |
+| `POST /api/v1/watch-spaces/{id}/participants/{userId}/remove` | Host removes a viewer, closes their membership, and permanently blocks them from rejoining that room. |
 | `POST /api/v1/watch-spaces/{id}/leave` | A viewer leaves; if the host leaves, the room ends. |
 | `POST /api/v1/watch-spaces/{id}/playback` | Host updates shared playback. Body: `{ "playbackState": "PLAYING", "positionMs": 12000 }`. Use `PAUSED` to pause or send a position to seek. |
 | `POST /api/v1/watch-spaces/{id}/heartbeat` | Active room members report presence. The client sends this every 10 seconds; a member is shown online for 30 seconds after the last heartbeat. |
 | `GET /api/v1/watch-spaces/{id}/chat?afterSequence=0&limit=50` | Read recent durable room messages, ordered by room sequence. Subsequent polls pass the latest `sequenceNo`. |
 | `POST /api/v1/watch-spaces/{id}/chat` | Send `{ "body": "Hello everyone" }`. Plain text only, up to 2,000 characters, rate-limited to 10 messages per minute per user and room. |
 
-The room response includes the title's media URI and duration, the caller's role, the room status, shared playback state and timestamp, and the active member list with online status. Clients poll the room every 1.2 seconds and correct playback drift against the server timestamp. Chat uses durable messages plus 1.6-second polling; presence uses 10-second heartbeats and a 30-second expiry window. This first pass uses authenticated HTTP polling; WebSocket delivery is not implemented yet.
+The room response includes the title's media URI and duration, the caller's role, the room status, shared playback state and timestamp, and the active member list with online and chat-muted status. Only the host can mute, unmute, or remove viewers; the host cannot moderate their own account. "Mute" applies to text chat only because this MVP does not include microphone or voice-call tracks. Clients poll the room every 1.2 seconds and correct playback drift against the server timestamp. Chat uses durable messages plus 1.6-second polling; presence uses 10-second heartbeats and a 30-second expiry window. This first pass uses authenticated HTTP polling; WebSocket delivery is not implemented yet.
 
 ## Local configuration
 
@@ -30,7 +33,7 @@ To seed the sample title, follow the opt-in steps in [m3-catalog-timeline.md](m3
 
 ## Current limits
 
-- Typing indicators, reactions, moderation, and WebSocket transport are not implemented.
+- Typing indicators, reactions, and WebSocket transport are not implemented. Moderation currently covers per-viewer text-chat muting and permanent room removal; voice/microphone muting is not available because the app has no voice-call feature.
 - Participant changes in an open room appear on the next room poll; a backgrounded or closed client is marked away after 30 seconds.
 - Create/join/start/end/leave/playback/chat changes are serialized through a bounded per-room mutation queue and persisted to PostgreSQL with room event sequence guards. Heartbeats refresh presence without adding room events.
 - Backend CI runs `./mvnw -B verify` with PostgreSQL 17 Testcontainers. The stabilization PR also passes Chromium E2E against a real Spring Boot process and PostgreSQL service. A manual local Compose run and real-device media-sync check remain pending.

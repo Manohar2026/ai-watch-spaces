@@ -38,13 +38,19 @@ async function browseCatalogue(page: Page) {
 test('two people can register, create and join a room, sync playback, chat, and leave', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
+  const observerContext = await browser.newContext();
   const hostPage = await hostContext.newPage();
   const guestPage = await guestContext.newPage();
+  const observerPage = await observerContext.newPage();
   await avoidExternalSampleVideo(hostPage);
   await avoidExternalSampleVideo(guestPage);
+  await avoidExternalSampleVideo(observerPage);
 
-  const guestEmail = `e2e-guest-${Date.now()}@example.test`;
+  const timestamp = Date.now();
+  const guestEmail = `e2e-guest-${timestamp}@example.test`;
+  const observerEmail = `e2e-observer-${timestamp}@example.test`;
   const guestPassword = 'Guest-Password-123!';
+  const observerPassword = 'Observer-Password-123!';
 
   try {
     // Existing seed owner signs in and creates a room from the real sample catalogue.
@@ -71,6 +77,15 @@ test('two people can register, create and join a room, sync playback, chat, and 
     await expect(guestPage.getByText('VIEWER', { exact: true })).toBeVisible();
     await expect(hostPage.getByText('E2E Guest', { exact: true })).toBeVisible();
 
+    const guestRow = hostPage.locator('.room-people-list li').filter({ hasText: 'E2E Guest' });
+
+    // Hosts can mute and unmute a viewer's chat without affecting playback.
+    await guestRow.getByRole('button', { name: 'Mute chat for E2E Guest' }).click();
+    await expect(guestPage.getByText('The host muted chat for you.')).toBeVisible();
+    await expect(guestPage.getByRole('textbox', { name: 'Chat message' })).toHaveCount(0);
+    await guestRow.getByRole('button', { name: 'Unmute chat for E2E Guest' }).click();
+    await expect(guestPage.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
+
     // Host starts the room and changes the authoritative playback state.
     await hostPage.getByRole('button', { name: 'Start the room' }).click();
     await expect(hostPage.getByText('ROOM IS LIVE', { exact: true })).toBeVisible();
@@ -87,15 +102,26 @@ test('two people can register, create and join a room, sync playback, chat, and 
     await expect(hostPage.getByText(message)).toBeVisible();
     await expect(guestPage.getByText(message)).toBeVisible({ timeout: 10_000 });
 
-    // The viewer leaves through the API; the host sees the participant disappear.
-    await guestPage.locator('.room-top-actions').getByRole('button', { name: 'Leave room' }).click();
+    // Host removes the viewer; they are returned to the catalogue and cannot rejoin.
+    hostPage.once('dialog', async (dialog) => dialog.accept());
+    await guestRow.getByRole('button', { name: 'Remove E2E Guest from room' }).click();
     await expect(guestPage.getByRole('heading', { name: 'Explore the catalogue.' })).toBeVisible();
     await expect(hostPage.getByText('E2E Guest', { exact: true })).toHaveCount(0);
 
-    // Ending the room returns its host to the catalogue and closes the lifecycle.
+    // A second viewer stays in the room to verify host-driven room termination.
+    await registerThroughUi(observerPage, 'E2E Observer', observerEmail, observerPassword);
+    await browseCatalogue(observerPage);
+    await observerPage.getByRole('button', { name: 'Join a space' }).click();
+    await observerPage.getByLabel('Invite code').fill(inviteCode!);
+    await observerPage.getByRole('button', { name: 'Join space' }).click();
+    await expect(observerPage.getByText('VIEWER', { exact: true })).toBeVisible();
+
+    // Ending the room returns both the host and all remaining viewers to the catalogue.
     await hostPage.getByRole('button', { name: 'End room' }).click();
     await expect(hostPage.getByRole('heading', { name: 'Explore the catalogue.' })).toBeVisible();
+    await expect(observerPage.getByRole('heading', { name: 'Explore the catalogue.' })).toBeVisible({ timeout: 10_000 });
   } finally {
+    await observerContext.close();
     await guestContext.close();
     await hostContext.close();
   }

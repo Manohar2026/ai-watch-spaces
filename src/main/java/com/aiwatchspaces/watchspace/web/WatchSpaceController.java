@@ -86,6 +86,24 @@ class WatchSpaceController {
         return lanes.submit(watchSpaceId, () -> rooms.end(watchSpaceId, actor));
     }
 
+    @PostMapping("/{watchSpaceId}/participants/{participantId}/mute")
+    Mono<RoomResponse> muteParticipant(@PathVariable UUID watchSpaceId, @PathVariable UUID participantId,
+                                       AuthenticatedUser actor) {
+        return lanes.submit(watchSpaceId, () -> rooms.muteParticipant(watchSpaceId, actor, participantId, true));
+    }
+
+    @PostMapping("/{watchSpaceId}/participants/{participantId}/unmute")
+    Mono<RoomResponse> unmuteParticipant(@PathVariable UUID watchSpaceId, @PathVariable UUID participantId,
+                                         AuthenticatedUser actor) {
+        return lanes.submit(watchSpaceId, () -> rooms.muteParticipant(watchSpaceId, actor, participantId, false));
+    }
+
+    @PostMapping("/{watchSpaceId}/participants/{participantId}/remove")
+    Mono<RoomResponse> removeParticipant(@PathVariable UUID watchSpaceId, @PathVariable UUID participantId,
+                                          AuthenticatedUser actor) {
+        return lanes.submit(watchSpaceId, () -> rooms.removeParticipant(watchSpaceId, actor, participantId));
+    }
+
     @PostMapping("/{watchSpaceId}/heartbeat")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     Mono<Void> heartbeat(@PathVariable UUID watchSpaceId, AuthenticatedUser actor) {

@@ -28,7 +28,7 @@ function statusLabel(status: WatchSpace['status']): string {
 }
 
 export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }: WatchSpacePageProps) {
-  const { getAccessToken, refreshAccessToken, logout } = useAuth();
+  const { user, getAccessToken, refreshAccessToken, logout } = useAuth();
   const [room, setRoom] = useState(initialRoom);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +41,7 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   const chatCursor = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isHost = room.myRole === 'HOST';
+  const isMutedForMe = room.participants.some((participant) => participant.userId === user?.id && participant.muted);
 
   function applyRoom(updated: WatchSpace) {
     setRoom(updated);
@@ -72,8 +73,12 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       try {
         const latest = await authorized((token) => watchSpaceApi.get(token, initialRoom.watchSpaceId));
         applyRoom(latest);
+        if (latest.status === 'ENDED') onExit();
       } catch (pollError) {
-        if (pollError instanceof ApiError && pollError.status === 401) await logout();
+        if (pollError instanceof ApiError) {
+          if (pollError.status === 401) await logout();
+          else if (pollError.code === 'REMOVED_FROM_ROOM') onExit();
+        }
       } finally {
         inFlight = false;
       }
@@ -194,7 +199,9 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       setMessages((current) => [...new Map<string, ChatMessage>([...current, message].map((item): [string, ChatMessage] => [item.id, item])).values()].slice(-50));
       setChatDraft('');
     } catch (chatError) {
-      setError(errorMessage(chatError));
+      setError(chatError instanceof ApiError && chatError.code === 'CHAT_MUTED'
+        ? 'The host muted chat for you.'
+        : errorMessage(chatError));
       if (chatError instanceof ApiError && chatError.status === 401) await logout();
     } finally {
       setChatPending(false);
@@ -351,9 +358,35 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
               <ul className="room-people-list">
                 {room.participants.map((person, index) => (
                   <li key={person.userId}>
-                    <span className={`room-avatar room-avatar-${index % 4} ${person.online ? 'room-avatar-online' : 'room-avatar-offline'}`}>{person.displayName.slice(0, 1).toUpperCase()}</span>
-                    <span className="room-person-name">{person.displayName}</span>
-                    <span className="room-person-role">{person.online ? 'ONLINE' : 'AWAY'}{person.roomRole === 'HOST' ? ' · HOST' : ''}</span>
+                    <div className="room-person-main">
+                      <span className={`room-avatar room-avatar-${index % 4} ${person.online ? 'room-avatar-online' : 'room-avatar-offline'}`}>{person.displayName.slice(0, 1).toUpperCase()}</span>
+                      <span className="room-person-name">{person.displayName}</span>
+                      <span className="room-person-role">
+                        {person.online ? 'ONLINE' : 'AWAY'}{person.roomRole === 'HOST' ? ' · HOST' : ''}{person.muted ? ' · CHAT MUTED' : ''}
+                      </span>
+                    </div>
+                    {isHost && room.status !== 'ENDED' && person.roomRole !== 'HOST' && (
+                      <div className="room-person-controls">
+                        <button type="button" disabled={pending}
+                          aria-label={`${person.muted ? 'Unmute' : 'Mute'} chat for ${person.displayName}`}
+                          onClick={() => void runRoomAction((token) =>
+                            person.muted
+                              ? watchSpaceApi.unmuteParticipant(token, room.watchSpaceId, person.userId)
+                              : watchSpaceApi.muteParticipant(token, room.watchSpaceId, person.userId))}>
+                          {person.muted ? 'Unmute chat' : 'Mute chat'}
+                        </button>
+                        <button type="button" className="room-remove-participant" disabled={pending}
+                          aria-label={`Remove ${person.displayName} from room`}
+                          onClick={() => {
+                            if (window.confirm(`Remove ${person.displayName} from this room? They will not be able to rejoin.`)) {
+                              void runRoomAction((token) =>
+                                watchSpaceApi.removeParticipant(token, room.watchSpaceId, person.userId));
+                            }
+                          }}>
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
                 {room.participants.length === 0 && <li className="room-empty-people">No active participants.</li>}
@@ -366,7 +399,15 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
                 {messages.map((message) => <li key={message.id}><strong>{message.displayName}</strong><p>{message.body}</p></li>)}
                 {!messages.length && <li className="chat-empty">Say hello to the room.</li>}
               </ol>
-              {room.status !== 'ENDED' && <form className="chat-compose" onSubmit={(event) => void sendChat(event)}><input maxLength={2000} value={chatDraft} onChange={(event) => setChatDraft(event.currentTarget.value)} placeholder="Write a message…" aria-label="Chat message" /><button type="submit" disabled={chatPending || !chatDraft.trim()}>{chatPending ? '…' : 'Send'}</button></form>}
+              {isMutedForMe && room.status !== 'ENDED' && (
+                <p className="chat-muted-notice" role="status">The host muted chat for you. You can still watch and read messages.</p>
+              )}
+              {!isMutedForMe && room.status !== 'ENDED' && (
+                <form className="chat-compose" onSubmit={(event) => void sendChat(event)}>
+                  <input maxLength={2000} value={chatDraft} onChange={(event) => setChatDraft(event.currentTarget.value)} placeholder="Write a message…" aria-label="Chat message" />
+                  <button type="submit" disabled={chatPending || !chatDraft.trim()}>{chatPending ? '…' : 'Send'}</button>
+                </form>
+              )}
             </section>
 
             {inviteCode && (

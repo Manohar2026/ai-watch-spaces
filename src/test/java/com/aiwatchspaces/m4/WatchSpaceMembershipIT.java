@@ -158,6 +158,139 @@ class WatchSpaceMembershipIT {
                 .jsonPath("$.myRole").isEqualTo("HOST");
     }
 
+    @Test
+    void hostCanMuteUnmuteAndRemoveViewer() {
+        var host = auth.newAccount();
+        var viewer = auth.newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+
+        Map<?, ?> created = client.post().uri("/api/v1/watch-spaces")
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("titleId", titleId))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(Map.class).returnResult().getResponseBody();
+        assertThat(created).isNotNull();
+        Map<?, ?> room = (Map<?, ?>) created.get("room");
+        UUID roomId = UUID.fromString((String) room.get("watchSpaceId"));
+        String inviteCode = (String) created.get("inviteCode");
+
+        client.post().uri("/api/v1/watch-spaces/join")
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("inviteCode", inviteCode))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.myRole").isEqualTo("VIEWER");
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/participants/{userId}/mute", roomId, viewer.userId())
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.participants[1].muted").isEqualTo(true);
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/chat", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("body", "This message should be blocked."))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("CHAT_MUTED");
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/participants/{userId}/unmute", roomId, viewer.userId())
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.participants[1].muted").isEqualTo(false);
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/chat", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("body", "Chat works after unmute."))
+                .exchange()
+                .expectStatus().isCreated();
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/participants/{userId}/remove", roomId, viewer.userId())
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("NOT_ROOM_HOST");
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/participants/{userId}/remove", roomId, viewer.userId())
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.participantCount").isEqualTo(1)
+                .jsonPath("$.participants.length()").isEqualTo(1);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT leave_reason FROM watch_space_participants
+                WHERE watch_space_id = ? AND user_id = ? AND left_at IS NOT NULL
+                ORDER BY left_at DESC LIMIT 1
+                """, String.class, roomId, viewer.userId())).isEqualTo("REMOVED");
+        assertThat(jdbc.queryForObject("""
+                SELECT removed_at IS NOT NULL FROM watch_space_moderation
+                WHERE watch_space_id = ? AND user_id = ?
+                """, Boolean.class, roomId, viewer.userId())).isTrue();
+
+        client.get().uri("/api/v1/watch-spaces/{roomId}", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("REMOVED_FROM_ROOM");
+
+        client.post().uri("/api/v1/watch-spaces/join")
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("inviteCode", inviteCode))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("REMOVED_FROM_ROOM");
+    }
+
+    @Test
+    void viewerCanReadEndedRoomStateAfterHostEndsRoom() {
+        var host = auth.newAccount();
+        var viewer = auth.newAccount();
+        UUID titleId = createPublishedTitle(host.userId());
+
+        Map<?, ?> created = client.post().uri("/api/v1/watch-spaces")
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("titleId", titleId))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(Map.class).returnResult().getResponseBody();
+        assertThat(created).isNotNull();
+        Map<?, ?> room = (Map<?, ?>) created.get("room");
+        UUID roomId = UUID.fromString((String) room.get("watchSpaceId"));
+        String inviteCode = (String) created.get("inviteCode");
+
+        client.post().uri("/api/v1/watch-spaces/join")
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("inviteCode", inviteCode))
+                .exchange()
+                .expectStatus().isOk();
+
+        client.post().uri("/api/v1/watch-spaces/{roomId}/end", roomId)
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.status").isEqualTo("ENDED");
+
+        client.get().uri("/api/v1/watch-spaces/{roomId}", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("ENDED")
+                .jsonPath("$.myRole").isEqualTo("NONE")
+                .jsonPath("$.participantCount").isEqualTo(0);
+    }
+
     private UUID createPublishedTitle(UUID createdBy) {
         UUID titleId = UUID.randomUUID();
         jdbc.update("""
