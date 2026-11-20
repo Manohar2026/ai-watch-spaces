@@ -49,7 +49,7 @@ npm run preview
 
 Tokens are kept in React memory only. Access tokens are refreshed automatically while the tab remains open; reloading the tab still loses the local session. See [frontend-auth.md](../docs/frontend-auth.md) for the API contract, limitations, and manual verification steps.
 
-The first product milestone is a normal non-AI watch-party experience: browse a title, create or join a room, watch in sync, and use chat and participant presence. The room currently synchronizes host play, pause, and seek through room polling; chat and online connection presence follow. Subtitles, timeline interactions, recommendations, analytics, and AI features are deferred until this core path is usable. AI will be integrated later against the working APIs.
+The first product milestone is a normal non-AI watch-party experience: browse a title, create or join a room, watch in sync, and use chat and participant presence. The room synchronizes host play, pause, and seek through polling, sends durable plain-text chat with short polling, and shows online status from 10-second heartbeats with a 30-second timeout. WebSockets, subtitles, timeline interactions, recommendations, analytics, and AI features are later work. AI will be integrated against the working APIs.
 
 The frontend CI has passed dependency installation, `npm run typecheck`, and `npm run build` for the existing implementation. The auth and catalogue flows have not yet been verified end-to-end against a locally running backend.
 
