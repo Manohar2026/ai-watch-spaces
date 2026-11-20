@@ -32,6 +32,7 @@ public class WatchSpaceService {
 
     private static final int DEFAULT_CAPACITY = 25;
     private static final int MAX_HOSTED_ROOMS = 5;
+    private static final long PRESENCE_WINDOW_SECONDS = 30;
 
     private static final RowMapper<RoomRow> ROOM_ROW = WatchSpaceService::mapRoom;
 
@@ -176,6 +177,21 @@ public class WatchSpaceService {
     }
 
     @Transactional
+    public void heartbeat(UUID roomId, AuthenticatedUser actor) {
+        RoomRow room = lockRoom(roomId);
+        if (room.status().equals("ENDED")) {
+            throw new ApiException(ErrorCode.ROOM_ENDED, "This watch space has ended.");
+        }
+        if (!isActiveMember(roomId, actor.userId())) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "Join this watch space to update presence.");
+        }
+        jdbc.update("""
+                UPDATE watch_space_participants SET last_seen_at = :now
+                WHERE watch_space_id = :roomId AND user_id = :userId AND left_at IS NULL
+                """, Map.of("now", mutationInstant(), "roomId", roomId, "userId", actor.userId()));
+    }
+
+    @Transactional
     public RoomResponse leave(UUID roomId, AuthenticatedUser actor) {
         RoomRow room = lockRoom(roomId);
         if (room.status().equals("ENDED")) {
@@ -278,14 +294,16 @@ public class WatchSpaceService {
         boolean member = isMember(roomId, viewerId);
         List<RoomParticipantResponse> participants = jdbc.query("""
                 SELECT u.id, u.display_name,
-                       CASE WHEN u.id = :hostId THEN 'HOST' ELSE 'VIEWER' END AS room_role
+                       CASE WHEN u.id = :hostId THEN 'HOST' ELSE 'VIEWER' END AS room_role,
+                       (p.last_seen_at >= :presenceCutoff) AS online
                 FROM watch_space_participants p
                 JOIN app_users u ON u.id = p.user_id
                 WHERE p.watch_space_id = :roomId AND p.left_at IS NULL
                 ORDER BY p.joined_at, u.id
-                """, Map.of("roomId", roomId, "hostId", room.hostUserId()),
+                """, Map.of("roomId", roomId, "hostId", room.hostUserId(),
+                        "presenceCutoff", mutationInstant().minusSeconds(PRESENCE_WINDOW_SECONDS)),
                 (rs, rowNum) -> new RoomParticipantResponse(rs.getObject("id", UUID.class),
-                        rs.getString("display_name"), rs.getString("room_role")));
+                        rs.getString("display_name"), rs.getString("room_role"), rs.getBoolean("online")));
         return new RoomResponse(room.id(), room.titleId(), room.titleName(), room.videoAssetUri(), room.durationMs(),
                 room.name(), room.privacy(), room.status(), room.hostUserId(),
                 room.hostUserId().equals(viewerId) ? "HOST" : (member ? "VIEWER" : "NONE"),
