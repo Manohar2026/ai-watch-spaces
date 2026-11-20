@@ -99,7 +99,7 @@ class CatalogManagementIT {
         assertThat(created).isNotNull();
         assertThat(created.get("slug").toString()).startsWith(name.toLowerCase().replace(' ', '-'));
         assertThat(created.get("defaultLocale")).isEqualTo("en-IN");
-        assertThat((List<?>) created.get("genres")).containsExactly("drama", "nature");
+        assertThat(created.get("genres")).isEqualTo(List.of("drama", "nature"));
         return UUID.fromString(created.get("id").toString());
     }
 }
