@@ -204,7 +204,19 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   return (
     <main className="room-shell">
       <header className="room-topbar">
-        <a className="brand" href="/" aria-label="Watch Spaces home">
+        <a
+          className="brand"
+          href="/"
+          aria-label="Leave room and return to catalogue"
+          onClick={(event) => {
+            event.preventDefault();
+            if (room.status === 'ENDED') {
+              onExit();
+            } else {
+              void runRoomAction((token) => watchSpaceApi.leave(token, room.watchSpaceId), true);
+            }
+          }}
+        >
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
