@@ -33,5 +33,5 @@ To seed the sample title, follow the opt-in steps in [m3-catalog-timeline.md](m3
 - Typing indicators, reactions, moderation, and WebSocket transport are not implemented.
 - Participant changes in an open room appear on the next room poll; a backgrounded or closed client is marked away after 30 seconds.
 - Create/join/start/end/leave/playback/chat changes are serialized through a bounded per-room mutation queue and persisted to PostgreSQL with room event sequence guards. Heartbeats refresh presence without adding room events.
-- M4 code has not been run against a local PostgreSQL environment in this work session.
+- Backend CI runs `./mvnw -B verify` with PostgreSQL 17 Testcontainers. The stabilization PR also passes Chromium E2E against a real Spring Boot process and PostgreSQL service. A manual local Compose run and real-device media-sync check remain pending.
 

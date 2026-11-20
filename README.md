@@ -21,12 +21,12 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).
 - **Backend M3 (draft PR #3):** Flyway V2, timeline JSON Schema v1, sample title/timeline/subtitles, published catalogue and timeline/subtitle read APIs. GitHub Actions `./mvnw -B verify` passed on the final M3 source commit: 67 unit tests and 71 integration tests, with zero failures, errors, or skips. See [docs/m3-catalog-timeline.md](docs/m3-catalog-timeline.md).
-- **Backend M4 (in progress):** Flyway V3/V4 room and chat tables, authenticated room lifecycle, hashed invite codes, host-controlled shared playback, durable chat, and heartbeat presence. Verification has not been run yet.
+- **Backend M4 (implemented; stabilization PR #8):** Flyway V3/V4 room and chat tables, authenticated room lifecycle, hashed invite codes, host-controlled shared playback, durable chat, and heartbeat presence. GitHub Actions `./mvnw -B verify` passed against PostgreSQL 17 Testcontainers on PR head `e6eca16` (69 unit tests and 73 integration tests, zero failures).
 - **Frontend F0:** full-stack architecture documented.
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
-- **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; browser verification against a local backend is pending.
-- **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
-- **Frontend room (in progress):** create/join/lifecycle, follow host playback, send/read chat, and see online/away status. Verification has not been run yet.
+- **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; automated Chromium registration/login journey passes; manual local-device verification remains pending.
+- **Frontend F3:** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; automated Chromium catalogue verification passes; manual local-device verification remains pending.
+- **Frontend room:** create/join/lifecycle, follow host playback state, send/read chat, and see online/away status. Backend, frontend and Chromium E2E CI all pass. Actual media synchronization across separate physical devices and local Compose verification remain outstanding.
 
 ## Current product scope
 
@@ -71,7 +71,7 @@ npm run dev
 
 Open http://localhost:5173. The Vite development server proxies `/api/*` to the backend at http://localhost:8080. Run `npm run typecheck` and `npm run build` to verify the frontend. See [frontend/README.md](frontend/README.md) for details.
 
-The frontend includes integration code for the M2 authentication contract, including timed access-token refresh using refresh-token rotation. GitHub Actions has passed the frontend typecheck and production build. The browser flow has not yet been run end-to-end against a local backend, so verify it before treating F2 as complete. See [docs/frontend-auth.md](docs/frontend-auth.md) for the exact contract and token-handling limitations.
+The frontend includes integration code for the M2 authentication contract, including timed access-token refresh using refresh-token rotation. GitHub Actions has passed the frontend typecheck and production build. The automated browser flow now runs against a real Spring Boot process and PostgreSQL service in CI. It does not yet replace manual verification of media playback on separate devices or local Compose setup. See [docs/frontend-auth.md](docs/frontend-auth.md) for the exact contract and token-handling limitations.
 
 ## Product and data boundaries
 

@@ -10,10 +10,10 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
   return (
     <main className="dashboard-shell">
       <header className="dashboard-topbar">
-        <a className="brand" href="/" aria-label="Watch Spaces home">
+        <div className="brand" aria-label="Watch Spaces">
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
-        </a>
+        </div>
         <button className="dashboard-logout" type="button" onClick={() => void logout()} disabled={isSubmitting}>
           Sign out
         </button>
@@ -51,7 +51,7 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
           <span className="next-step-icon">✦</span>
           <div>
             <h3>Your watch spaces are coming together.</h3>
-            <p>Browse the catalogue now. Room creation, synchronized playback, chat, and presence are the next product features.</p>
+            <p>Browse the catalogue, choose a sample title, and create a shared space for playback, chat, and presence.</p>
           </div>
         </div>
       </section>

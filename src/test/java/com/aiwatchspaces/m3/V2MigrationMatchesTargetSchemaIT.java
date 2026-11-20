@@ -20,7 +20,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /**
- * Flyway V1 + V2 must produce exactly the identity/catalogue/timeline slice of DATABASE_SCHEMA.sql.
+ * Flyway V1..V3 must produce exactly the identity/catalogue/room slices of DATABASE_SCHEMA.sql.
+ * V4 is the intentionally smaller CHAT-only MVP table; its shape is asserted separately below.
  * The canonical slice is applied in a fresh PostgreSQL database and compared to the migrated
  * application database: tables, columns, constraints and indexes.
  */
@@ -30,23 +31,24 @@ class V2MigrationMatchesTargetSchemaIT {
     private static final String V1_START = "-- Identity and authentication (modules: users, auth)";
     private static final String V2_START = "-- Catalogue (module: catalog)";
     private static final String V3_START = "-- Watch Spaces, membership and moderation (module: watchspace)";
+    private static final String AI_START = "-- AI Q&A, citations and pinned facts (module: ai)";
 
     private static final String TABLES = """
             SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history' ORDER BY table_name""";
+            WHERE table_schema = 'public' AND table_name NOT IN ('flyway_schema_history', 'chat_messages') ORDER BY table_name""";
     private static final String COLUMNS = """
             SELECT table_name, column_name, data_type, character_maximum_length, is_nullable, column_default
             FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'
+            WHERE table_schema = 'public' AND table_name NOT IN ('flyway_schema_history', 'chat_messages')
             ORDER BY table_name, ordinal_position""";
     private static final String CONSTRAINTS = """
             SELECT conrelid::regclass::text AS table_name, conname, contype, pg_get_constraintdef(oid) AS definition
             FROM pg_constraint WHERE connamespace = 'public'::regnamespace
-              AND conrelid::regclass::text <> 'flyway_schema_history'
+              AND conrelid::regclass::text NOT IN ('flyway_schema_history', 'chat_messages')
             ORDER BY 1, 2""";
     private static final String INDEXES = """
             SELECT tablename, indexname, indexdef FROM pg_indexes
-            WHERE schemaname = 'public' AND tablename <> 'flyway_schema_history' ORDER BY 1, 2""";
+            WHERE schemaname = 'public' AND tablename NOT IN ('flyway_schema_history', 'chat_messages') ORDER BY 1, 2""";
 
     @Autowired
     JdbcTemplate migrated;
@@ -55,17 +57,20 @@ class V2MigrationMatchesTargetSchemaIT {
     DataSource dataSource;
 
     @Test
-    void v1AndV2MigrationsEqualTheCanonicalTargetSchemaSlices() throws Exception {
+    void v1ThroughV3MigrationsEqualTheCanonicalTargetSchemaSlices() throws Exception {
         String schema = Files.readString(Path.of("DATABASE_SCHEMA.sql"));
         int v1Start = schema.indexOf(V1_START);
         int v2Start = schema.indexOf(V2_START);
         int v3Start = schema.indexOf(V3_START);
+        int aiStart = schema.indexOf(AI_START);
         assertThat(v1Start).isGreaterThanOrEqualTo(0);
         assertThat(v2Start).isGreaterThan(v1Start);
         assertThat(v3Start).isGreaterThan(v2Start);
+        assertThat(aiStart).isGreaterThan(v3Start);
 
         String v1Slice = schema.substring(v1Start, v2Start);
         String v2Slice = schema.substring(v2Start, v3Start);
+        String v3Slice = schema.substring(v3Start, aiStart);
         assertThat(v1Slice).contains("CREATE TABLE app_users", "CREATE TABLE refresh_tokens");
         assertThat(v2Slice).contains(
                 "CREATE TABLE titles",
@@ -74,9 +79,14 @@ class V2MigrationMatchesTargetSchemaIT {
                 "CREATE TABLE subtitle_tracks",
                 "CREATE TABLE subtitle_cues",
                 "CREATE TABLE variation_options");
-
+        assertThat(v3Slice).contains(
+                "CREATE TABLE watch_spaces",
+                "CREATE TABLE room_subtitle_tracks",
+                "CREATE TABLE watch_space_participants",
+                "CREATE TABLE watch_space_moderation",
+                "CREATE TABLE room_events");
         HikariDataSource hikari = dataSource.unwrap(HikariDataSource.class);
-        String targetDb = "target_v2_" + System.nanoTime();
+        String targetDb = "target_v3_" + System.nanoTime();
         migrated.execute("CREATE DATABASE " + targetDb);
         String targetUrl = hikari.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + targetDb + "$1");
 
@@ -84,6 +94,7 @@ class V2MigrationMatchesTargetSchemaIT {
             try (Statement statement = connection.createStatement()) {
                 statement.execute(v1Slice);
                 statement.execute(v2Slice);
+                statement.execute(v3Slice);
             }
             JdbcTemplate target = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
 
@@ -94,6 +105,30 @@ class V2MigrationMatchesTargetSchemaIT {
         } finally {
             migrated.execute("DROP DATABASE IF EXISTS " + targetDb);
         }
+    }
+
+    @Test
+    void v4CreatesTheDocumentedPlainTextMvpChatTable() {
+        List<String> columns = migrated.queryForList("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'chat_messages'
+                ORDER BY ordinal_position
+                """, String.class);
+        assertThat(columns).containsExactly(
+                "id", "watch_space_id", "room_event_id", "user_id", "message_type", "body", "created_at");
+
+        List<String> definitions = migrated.queryForList("""
+                SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                WHERE connamespace = 'public'::regnamespace
+                  AND conrelid = 'chat_messages'::regclass
+                """, String.class);
+        assertThat(definitions).anyMatch(definition -> definition.contains("message_type") && definition.contains("CHAT"));
+        assertThat(definitions).anyMatch(definition -> definition.contains("body") && definition.contains("2000"));
+
+        assertThat(migrated.queryForList("""
+                SELECT indexname FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'chat_messages'
+                """, String.class)).contains("ix_chat_messages_room_created");
     }
 
     private static List<Map<String, Object>> rows(JdbcTemplate jdbc, String sql) {
