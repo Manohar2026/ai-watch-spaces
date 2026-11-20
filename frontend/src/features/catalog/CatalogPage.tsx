@@ -2,11 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { catalogApi, formatDuration, type PageResponse, type TitleDetail, type TitleSummary } from './catalogApi';
+import { watchSpaceApi, type WatchSpace } from '../watchspace/watchSpaceApi';
 
 const PAGE_SIZE = 12;
 
 interface CatalogPageProps {
   onBack(): void;
+  onRoomEnter(room: WatchSpace, inviteCode?: string): void;
 }
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -26,7 +28,7 @@ function friendlyError(error: unknown): string {
   return 'The catalogue could not be loaded. Check your connection and try again.';
 }
 
-export function CatalogPage({ onBack }: CatalogPageProps) {
+export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
   const { getAccessToken, refreshAccessToken, logout } = useAuth();
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
@@ -40,6 +42,11 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
   const [selectedTitle, setSelectedTitle] = useState<TitleDetail | null>(null);
   const [detailState, setDetailState] = useState<LoadState>('ready');
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [roomError, setRoomError] = useState<string | null>(null);
+  const [roomPending, setRoomPending] = useState(false);
 
   async function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
     let token = getAccessToken();
@@ -94,6 +101,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
 
   async function openTitle(titleId: string) {
     setSelectedTitleId(titleId);
+    setRoomError(null);
     setSelectedTitle(null);
     setDetailError(null);
     setDetailState('loading');
@@ -104,6 +112,35 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
     } catch (detailLoadError) {
       setDetailError(friendlyError(detailLoadError));
       setDetailState('error');
+    }
+  }
+
+  async function createWatchSpace(titleId: string) {
+    setRoomPending(true);
+    setRoomError(null);
+    try {
+      const created = await authorized((token) => watchSpaceApi.create(token, titleId));
+      onRoomEnter(created.room, created.inviteCode);
+    } catch (createError) {
+      setRoomError(friendlyError(createError));
+    } finally {
+      setRoomPending(false);
+    }
+  }
+
+  async function joinWatchSpace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setJoinError(null);
+    setRoomPending(true);
+    try {
+      const room = await authorized((token) => watchSpaceApi.joinByCode(token, inviteCode.trim()));
+      setJoinOpen(false);
+      setInviteCode('');
+      onRoomEnter(room);
+    } catch (joinRequestError) {
+      setJoinError(friendlyError(joinRequestError));
+    } finally {
+      setRoomPending(false);
     }
   }
 
@@ -132,6 +169,7 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
         <div className="catalog-top-actions">
+          <button className="catalog-back-button catalog-join-button" type="button" onClick={() => { setJoinError(null); setJoinOpen(true); }}>Join a space</button>
           <button className="catalog-back-button" type="button" onClick={onBack}>Dashboard</button>
           <button className="dashboard-logout" type="button" onClick={() => void logout()}>Sign out</button>
         </div>
@@ -210,7 +248,6 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
                   <div className="title-card-body">
                     <div className="title-card-heading">
                       <h2>{title.name}</h2>
-                      <span className="title-locale">{title.defaultLocale}</span>
                     </div>
                     <p>{title.description || 'A story waiting to be explored together.'}</p>
                     <div className="title-genres">
@@ -266,8 +303,35 @@ export function CatalogPage({ onBack }: CatalogPageProps) {
                     return null;
                   }
                 })()}
+                <div className="room-create-action">
+                  {roomError && <p className="room-action-error" role="alert">{roomError}</p>}
+                  <button className="primary-button catalog-room-create" type="button" disabled={roomPending} onClick={() => void createWatchSpace(selectedTitle.id)}>
+                    {roomPending ? 'Creating your space…' : 'Create a watch space'} <span aria-hidden="true">→</span>
+                  </button>
+                </div>
               </>
             )}
+          </section>
+        </div>
+      )}
+
+      {joinOpen && (
+        <div className="detail-overlay" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setJoinOpen(false);
+        }}>
+          <section className="title-detail-panel join-space-panel" role="dialog" aria-modal="true" aria-labelledby="join-space-title">
+            <button className="detail-close" type="button" onClick={() => setJoinOpen(false)} aria-label="Close join form">×</button>
+            <p className="eyebrow">YOUR FRIENDS ARE WAITING</p>
+            <h2 id="join-space-title">Join a watch space.</h2>
+            <p className="detail-description">Enter the invite code shared by the host to join their room.</p>
+            <form className="join-space-form" onSubmit={(event) => void joinWatchSpace(event)}>
+              <label htmlFor="watch-space-code">Invite code</label>
+              <input id="watch-space-code" autoComplete="off" autoCapitalize="characters" maxLength={11} required value={inviteCode} onChange={(event) => setInviteCode(event.target.value.toUpperCase())} placeholder="XXXXX-XXXXX" />
+              {joinError && <p className="room-action-error" role="alert">{joinError}</p>}
+              <button className="primary-button" type="submit" disabled={roomPending || inviteCode.trim().length < 10}>
+                {roomPending ? 'Joining…' : 'Join space'} <span aria-hidden="true">→</span>
+              </button>
+            </form>
           </section>
         </div>
       )}
