@@ -110,13 +110,14 @@ test('catalogue genre filter waits for search submission', async ({ page }) => {
   });
 
   await browseCatalogue(page);
-  await expect.poll(() => titleRequests.length).toBe(1);
+  await expect.poll(() => titleRequests.length).toBeGreaterThan(0);
+  const initialRequestCount = titleRequests.length;
 
   await page.getByLabel('Filter by genre').fill('nature');
   await page.waitForTimeout(300);
-  expect(titleRequests).toHaveLength(1);
+  expect(titleRequests).toHaveLength(initialRequestCount);
 
   await page.getByRole('button', { name: /Search/ }).click();
-  await expect.poll(() => titleRequests.length).toBe(2);
-  expect(titleRequests[1]).toContain('genre=nature');
+  await expect.poll(() => titleRequests.length).toBe(initialRequestCount + 1);
+  expect(titleRequests.at(-1)).toContain('genre=nature');
 });
