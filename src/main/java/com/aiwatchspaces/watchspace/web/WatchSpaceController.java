@@ -14,6 +14,7 @@ import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.CreateRoomRequest;
 import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.JoinByCodeRequest;
 import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.RoomCreatedResponse;
 import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.RoomResponse;
+import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.PlaybackRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -83,6 +84,12 @@ class WatchSpaceController {
     @PostMapping("/{watchSpaceId}/end")
     Mono<RoomResponse> end(@PathVariable UUID watchSpaceId, AuthenticatedUser actor) {
         return lanes.submit(watchSpaceId, () -> rooms.end(watchSpaceId, actor));
+    }
+
+    @PostMapping("/{watchSpaceId}/playback")
+    Mono<RoomResponse> playback(@PathVariable UUID watchSpaceId, @Valid @RequestBody PlaybackRequest request,
+                                AuthenticatedUser actor) {
+        return lanes.submit(watchSpaceId, () -> rooms.updatePlayback(watchSpaceId, actor, request));
     }
 
     private void checkJoinRate(AuthenticatedUser actor) {
