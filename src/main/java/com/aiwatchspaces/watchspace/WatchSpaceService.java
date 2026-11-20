@@ -171,7 +171,10 @@ public class WatchSpaceService {
 
     @Transactional(readOnly = true)
     public RoomResponse get(UUID roomId, AuthenticatedUser actor) {
-        if (!isMember(roomId, actor.userId())) {
+        if (isRemoved(roomId, actor.userId())) {
+            throw new ApiException(ErrorCode.REMOVED_FROM_ROOM, "You have been removed from this watch space.");
+        }
+        if (!isMember(roomId, actor.userId()) && !isEndedRoomParticipant(roomId, actor.userId())) {
             throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "Join this watch space to view it.");
         }
         return loadRoom(roomId, actor.userId());
@@ -290,21 +293,99 @@ public class WatchSpaceService {
         return loadRoom(roomId, actor.userId());
     }
 
+    @Transactional
+    public RoomResponse muteParticipant(UUID roomId, AuthenticatedUser actor, UUID participantId, boolean muted) {
+        RoomRow room = lockRoom(roomId);
+        requireHost(room, actor.userId());
+        requireRoomOpen(room);
+        requireModeratableParticipant(room, roomId, participantId);
+        if (isParticipantMuted(roomId, participantId) == muted) return loadRoom(roomId, actor.userId());
+
+        Instant now = mutationInstant();
+        jdbc.update("""
+                INSERT INTO watch_space_moderation (
+                    watch_space_id, user_id, is_muted, muted_at, muted_by, updated_at
+                ) VALUES (
+                    :roomId, :participantId, :muted,
+                    CASE WHEN :muted THEN :now ELSE NULL END,
+                    CASE WHEN :muted THEN :actor ELSE NULL END,
+                    :now
+                )
+                ON CONFLICT (watch_space_id, user_id) DO UPDATE SET
+                    is_muted = EXCLUDED.is_muted,
+                    muted_at = EXCLUDED.muted_at,
+                    muted_by = EXCLUDED.muted_by,
+                    updated_at = EXCLUDED.updated_at
+                """, Map.of("roomId", roomId, "participantId", participantId, "muted", muted,
+                        "actor", actor.userId(), "now", Timestamp.from(now)));
+        long sequence = room.lastSequenceNo() + 1;
+        appendEvent(roomId, sequence, actor.userId(), "PARTICIPANT_MUTE_CHANGED",
+                "{\"userId\":\"" + participantId + "\",\"isMuted\":" + muted + "}", now);
+        advanceRoom(roomId, room.lastSequenceNo(), sequence);
+        return loadRoom(roomId, actor.userId());
+    }
+
+    @Transactional
+    public RoomResponse removeParticipant(UUID roomId, AuthenticatedUser actor, UUID participantId) {
+        RoomRow room = lockRoom(roomId);
+        requireHost(room, actor.userId());
+        requireRoomOpen(room);
+        requireModeratableParticipant(room, roomId, participantId);
+        Instant now = mutationInstant();
+        jdbc.update("""
+                UPDATE watch_space_participants
+                SET left_at = :now, leave_reason = 'REMOVED'
+                WHERE watch_space_id = :roomId AND user_id = :participantId AND left_at IS NULL
+                """, Map.of("now", Timestamp.from(now), "roomId", roomId, "participantId", participantId));
+        jdbc.update("""
+                INSERT INTO watch_space_moderation (
+                    watch_space_id, user_id, is_muted, removed_at, removed_by, updated_at
+                ) VALUES (:roomId, :participantId, FALSE, :now, :actor, :now)
+                ON CONFLICT (watch_space_id, user_id) DO UPDATE SET
+                    removed_at = EXCLUDED.removed_at,
+                    removed_by = EXCLUDED.removed_by,
+                    updated_at = EXCLUDED.updated_at
+                """, Map.of("roomId", roomId, "participantId", participantId, "now", Timestamp.from(now),
+                        "actor", actor.userId()));
+        long sequence = room.lastSequenceNo() + 1;
+        appendEvent(roomId, sequence, actor.userId(), "PARTICIPANT_REMOVED",
+                "{\"userId\":\"" + participantId + "\"}", now);
+        advanceRoom(roomId, room.lastSequenceNo(), sequence);
+        return loadRoom(roomId, actor.userId());
+    }
+
+    private void requireRoomOpen(RoomRow room) {
+        if (room.status().equals("ENDED")) throw new ApiException(ErrorCode.ROOM_ENDED, "This watch space has ended.");
+    }
+
+    private void requireModeratableParticipant(RoomRow room, UUID roomId, UUID participantId) {
+        if (room.hostUserId().equals(participantId)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "The host cannot be muted or removed.");
+        }
+        if (!isActiveMember(roomId, participantId)) {
+            throw new ApiException(ErrorCode.NOT_ROOM_MEMBER, "This participant is not active in the room.");
+        }
+    }
+
     private RoomResponse loadRoom(UUID roomId, UUID viewerId) {
         RoomRow room = locklessRoom(roomId);
         boolean member = isMember(roomId, viewerId);
         List<RoomParticipantResponse> participants = jdbc.query("""
                 SELECT u.id, u.display_name,
                        CASE WHEN u.id = :hostId THEN 'HOST' ELSE 'VIEWER' END AS room_role,
-                       (p.last_seen_at >= :presenceCutoff) AS online
+                       (p.last_seen_at >= :presenceCutoff) AS online,
+                       COALESCE(m.is_muted, FALSE) AS muted
                 FROM watch_space_participants p
                 JOIN app_users u ON u.id = p.user_id
+                LEFT JOIN watch_space_moderation m
+                  ON m.watch_space_id = p.watch_space_id AND m.user_id = p.user_id
                 WHERE p.watch_space_id = :roomId AND p.left_at IS NULL
                 ORDER BY p.joined_at, u.id
                 """, Map.of("roomId", roomId, "hostId", room.hostUserId(),
                         "presenceCutoff", Timestamp.from(mutationInstant().minusSeconds(PRESENCE_WINDOW_SECONDS))),
                 (rs, rowNum) -> new RoomParticipantResponse(rs.getObject("id", UUID.class),
-                        rs.getString("display_name"), rs.getString("room_role"), rs.getBoolean("online")));
+                        rs.getString("display_name"), rs.getString("room_role"), rs.getBoolean("online"),
+                        rs.getBoolean("muted")));
         return new RoomResponse(room.id(), room.titleId(), room.titleName(), room.videoAssetUri(), room.durationMs(),
                 room.name(), room.privacy(), room.status(), room.hostUserId(),
                 room.hostUserId().equals(viewerId) ? "HOST" : (member ? "VIEWER" : "NONE"),
@@ -361,6 +442,18 @@ public class WatchSpaceService {
         return Boolean.TRUE.equals(result);
     }
 
+    private boolean isEndedRoomParticipant(UUID roomId, UUID userId) {
+        Boolean result = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_spaces ws
+                    JOIN watch_space_participants p ON p.watch_space_id = ws.id
+                    WHERE ws.id = :roomId AND ws.status = 'ENDED'
+                      AND p.user_id = :userId AND p.leave_reason = 'ROOM_ENDED'
+                )
+                """, Map.of("roomId", roomId, "userId", userId), Boolean.class);
+        return Boolean.TRUE.equals(result);
+    }
+
     private boolean isActiveMember(UUID roomId, UUID userId) {
         Boolean result = jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM watch_space_participants
@@ -373,6 +466,16 @@ public class WatchSpaceService {
         Boolean result = jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM watch_space_participants
                                WHERE watch_space_id = :roomId AND user_id = :userId)
+                """, Map.of("roomId", roomId, "userId", userId), Boolean.class);
+        return Boolean.TRUE.equals(result);
+    }
+
+    private boolean isParticipantMuted(UUID roomId, UUID userId) {
+        Boolean result = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM watch_space_moderation
+                    WHERE watch_space_id = :roomId AND user_id = :userId AND is_muted = TRUE
+                )
                 """, Map.of("roomId", roomId, "userId", userId), Boolean.class);
         return Boolean.TRUE.equals(result);
     }
