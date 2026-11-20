@@ -110,13 +110,13 @@ function AppContent() {
           </article>
           <article className="feature-card">
             <span className="feature-number">02</span>
-            <h3>Talk about the moment</h3>
-            <p>Keep conversations, reactions, and room presence alongside the story.</p>
+            <h3>Chat through the moments</h3>
+            <p>Keep the conversation alongside the story as you watch together.</p>
           </article>
           <article className="feature-card">
             <span className="feature-number">03</span>
             <h3>See who's here</h3>
-            <p>Keep your friends close with room presence and a shared conversation.</p>
+            <p>See who's joined and keep your friends close in the shared room.</p>
           </article>
         </div>
       </section>
