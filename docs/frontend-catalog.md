@@ -4,10 +4,11 @@
 
 ## Backend API consumed
 
-The page uses the published catalogue read endpoints from backend M3:
+The page uses the published catalogue endpoints from backend M3:
 
 - `GET /api/v1/titles?page=0&size=12&query=&genre=`
 - `GET /api/v1/titles/{titleId}`
+- `POST /api/v1/titles` adds and publishes a title for the signed-in user. Required fields: `name`, `videoAssetUri`, and `durationSeconds`; optional fields: `description` and up to ten `genres`. Only direct HTTP(S) video URLs are accepted. The endpoint is rate-limited to 10 additions per user per hour.
 
 Every request includes the current Bearer access token. If an API call returns HTTP 401, the page attempts one refresh-token rotation through the auth provider and retries once with the new access token. The auth provider keeps refresh single-flight to avoid replaying a rotated refresh token.
 
@@ -39,6 +40,8 @@ Every request includes the current Bearer access token. If an API call returns H
 - Genre filtering sends the entered genre to the backend; the UI does not assume that the current page contains all available genres.
 - Pagination follows the backend's zero-based `page`, `size`, and `totalElements` fields.
 - The detail panel requests the selected title's full details from the backend.
+- The catalogue heading opens an Add a title form; after a successful create, the page reloads the catalogue and shows the new title.
+- Any signed-in user may publish titles in this MVP. Add review/moderation before exposing this behavior to a public multi-user deployment.
 - Media links are rendered only for HTTP or HTTPS asset URIs.
 - Loading, empty, error, retry, and page-navigation states are explicit.
 - Catalogue access is protected; the UI redirects to the landing page after local sign-out.
@@ -65,3 +68,4 @@ npm run build
 Then start PostgreSQL/backend with the optional M3 sample seeder enabled, register/login, open the catalogue, search for `The First Bloom`, filter by `nature`, page through results, and open the detail panel.
 
 GitHub Actions is configured to run dependency installation, TypeScript checking and the Vite production build for this branch and its pull request to `feature/m3-catalog-timeline`. A passing build does not substitute for the local browser/API walkthrough.
+
