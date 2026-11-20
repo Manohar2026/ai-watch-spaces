@@ -307,8 +307,8 @@ public class WatchSpaceService {
                     watch_space_id, user_id, is_muted, muted_at, muted_by, updated_at
                 ) VALUES (
                     :roomId, :participantId, :muted,
-                    CASE WHEN :muted THEN :now ELSE NULL END,
-                    CASE WHEN :muted THEN :actor ELSE NULL END,
+                    CASE WHEN :muted THEN CAST(:now AS timestamptz) ELSE NULL::timestamptz END,
+                    CASE WHEN :muted THEN CAST(:actor AS uuid) ELSE NULL::uuid END,
                     :now
                 )
                 ON CONFLICT (watch_space_id, user_id) DO UPDATE SET
