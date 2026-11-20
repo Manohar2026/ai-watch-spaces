@@ -2,7 +2,7 @@
 
 Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHEMA.sql` (v0.4) before proposing or changing architecture. `FULL_STACK_ARCHITECTURE.md` is the approved full-stack scope (React + TypeScript frontend with the existing Java/Spring Boot backend). `SYSTEM_DESIGN.md` remains the detailed backend baseline, and `DATABASE_SCHEMA.sql` is the target state, not a migration.
 
-**Current checkpoint:** backend M1 and M2 implemented (2026-10-26); frontend F0–F2 direction and initial implementation are on `feature/full-stack-architecture`. **Backend M3 was explicitly authorized by the user on 2026-11-04. M4 and later require separate explicit authorization.** The M3 implementation must follow the exact approved v0.4 design and report every verification result honestly.
+**Current checkpoint:** backend M1–M3 and frontend foundation/auth plus initial catalogue are implemented on `main`; catalogue detail integration is in draft PR #5. The current user has now authorized the non-AI watch-party MVP, including room lifecycle, synchronized playback, chat, and presence. Current scope explicitly defers subtitles/variations, timeline UI, recommendations, analytics, and AI features until the core product is usable. AI is planned as a later integration phase, not removed from the long-term product.
 
 ## Guardrails
 
@@ -13,6 +13,7 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
 - Never expose secrets through `VITE_` variables. Keep access and refresh tokens out of localStorage/sessionStorage/URLs/logs unless a separately approved security design changes the current in-memory policy.
 - Treat the backend as authoritative for identity, authorization, persistence, room state, playback, and vote outcomes. UI must reflect backend confirmations and errors.
 - Use accessible semantic markup and include loading, empty, error, and disabled states.
+- Prioritize the first end-to-end non-AI journey: sign in → browse a sample title → create/join a watch space → synchronized playback → chat and presence. Do not expand subtitle, timeline, recommendation, analytics, or AI features ahead of this flow.
 
 ### Backend scope and architecture
 1. Build the complete full-stack application in this monorepo. Keep the React + TypeScript browser application under `frontend/`; keep the Java/Spring Boot API and backend modules at the repository root. Do not put browser templates or frontend assets inside the backend.
@@ -67,7 +68,9 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
     - HMAC-hashed invite codes; rate limits; WebSocket token renewal, close codes and slow-consumer policy.
 18. Never commit real secrets. `JWT_SIGNING_KEY`, `INVITE_CODE_PEPPER`, DB credentials and `LLM_API_KEY` come from environment variables; `.env.example` holds placeholders only. Never log passwords, tokens, invite codes or API keys.
 
-### AI and variations
+### Deferred AI and variations
+
+These features are part of the later product plan, not the current MVP. Keep module boundaries and APIs compatible with a later integration, but do not implement or surface these features in the first watch-party journey.
 19. AI answers must be grounded in retrieved timeline events from the room's pinned version, never use future entries, and cite validated source IDs. Insufficient evidence returns the documented fallback. Do not claim citation validation proves factual correctness.
 20. Subtitle tracks: a `SUBTITLE_TRACK_SWAP` option must reference a track of the same title and locale (R11, composite FK); room start pins only the `ACTIVE` track per locale of the room's title (R12); pinned tracks, cues and assets stay usable until the room ends (R13). Swap options whose track is not pinned in the room are ineligible (`409 OPTION_NOT_ELIGIBLE`). Implement the five tests in SYSTEM_DESIGN §4.9.
 20a. Only pre-authored, approved variation options may be applied (vote, host selection, or deterministic locale rules). Model output must never create or alter subtitles, assets or narrative variations. Per-viewer locale alternates must not change playback state or `stateVersion`.
@@ -102,3 +105,4 @@ Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHE
 | M7 | Sync ping/pong, drift correction, connection quality, measured joiner sync |
 
 Do not begin chat, AI, variations, recommendations or analytics until M7 passes.
+

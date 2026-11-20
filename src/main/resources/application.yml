@@ -62,6 +62,8 @@ aiws:
   seed-content:
     enabled: ${AIWS_SEED_CONTENT_ENABLED:false}
     uploaded-by: ${AIWS_SEED_CONTENT_UPLOADED_BY:}
+  invite-codes:
+    pepper: ${INVITE_CODE_PEPPER:}
 
 logging:
   structured:
@@ -91,3 +93,4 @@ management:
   info:
     env:
       enabled: false
+

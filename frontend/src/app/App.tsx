@@ -3,23 +3,52 @@ import { AuthProvider, useAuth } from '../features/auth/AuthProvider';
 import { AuthScreen } from '../features/auth/AuthScreen';
 import { Dashboard } from '../features/dashboard/Dashboard';
 import { CatalogPage } from '../features/catalog/CatalogPage';
+import { WatchSpacePage } from '../features/watchspace/WatchSpacePage';
+import type { WatchSpace } from '../features/watchspace/watchSpaceApi';
 
-type View = 'home' | 'login' | 'register' | 'catalog';
+type View = 'home' | 'login' | 'register' | 'catalog' | 'room';
 
 function AppContent() {
   const [view, setView] = useState<View>('home');
   const [authNotice, setAuthNotice] = useState<string | undefined>();
+  const [activeRoom, setActiveRoom] = useState<WatchSpace | null>(null);
+  const [roomInviteCode, setRoomInviteCode] = useState<string | undefined>();
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user && view === 'catalog') {
+    if (!user && (view === 'catalog' || view === 'room')) {
+      setActiveRoom(null);
+      setRoomInviteCode(undefined);
       setView('home');
     }
   }, [user, view]);
 
   if (user) {
+    if (view === 'room' && activeRoom) {
+      return (
+        <WatchSpacePage
+          initialRoom={activeRoom}
+          inviteCode={roomInviteCode}
+          onRoomChange={setActiveRoom}
+          onExit={() => {
+            setActiveRoom(null);
+            setRoomInviteCode(undefined);
+            setView('catalog');
+          }}
+        />
+      );
+    }
     if (view === 'catalog') {
-      return <CatalogPage onBack={() => setView('home')} />;
+      return (
+        <CatalogPage
+          onBack={() => setView('home')}
+          onRoomEnter={(room, code) => {
+            setActiveRoom(room);
+            setRoomInviteCode(code);
+            setView('room');
+          }}
+        />
+      );
     }
     return <Dashboard onBrowseCatalog={() => setView('catalog')} />;
   }
@@ -44,7 +73,7 @@ function AppContent() {
   return (
     <main className="page-shell">
       <nav className="topbar" aria-label="Main navigation">
-        <a className="brand" href="/" aria-label="AI Watch Spaces home">
+        <a className="brand" href="/" aria-label="Watch Spaces home">
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
@@ -61,7 +90,7 @@ function AppContent() {
           <h1 id="hero-title">Some stories are<br />better <span>together.</span></h1>
           <p className="hero-description">
             Bring your people into one watch space. Stay in sync, share reactions,
-            and discover more about every moment.
+            and enjoy the story together.
           </p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={() => setView('register')}>
@@ -99,7 +128,7 @@ function AppContent() {
 
       <section className="feature-section" id="how-it-works" aria-labelledby="feature-title">
         <div className="section-heading">
-          <p className="eyebrow">MORE THAN PRESSING PLAY</p>
+          <p className="eyebrow">BETTER TOGETHER</p>
           <h2 id="feature-title">A space for every kind of fan.</h2>
         </div>
         <div className="feature-grid">
@@ -110,13 +139,13 @@ function AppContent() {
           </article>
           <article className="feature-card">
             <span className="feature-number">02</span>
-            <h3>Talk about the moment</h3>
-            <p>Keep conversations, reactions, and room presence alongside the story.</p>
+            <h3>Chat through the moments</h3>
+            <p>Keep the conversation alongside the story as you watch together.</p>
           </article>
           <article className="feature-card">
             <span className="feature-number">03</span>
-            <h3>Go beyond the screen</h3>
-            <p>Explore contextual facts, interactive trivia, and AI-assisted answers.</p>
+            <h3>See who's here</h3>
+            <p>See who's joined and keep your friends close in the shared room.</p>
           </article>
         </div>
       </section>
@@ -138,3 +167,4 @@ function App() {
 }
 
 export default App;
+
