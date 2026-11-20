@@ -1,0 +1,149 @@
+name: Browser E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "frontend/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".mvn/**"
+      - ".github/workflows/e2e-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "frontend/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".mvn/**"
+      - ".github/workflows/e2e-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    name: Chromium end-to-end against PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_DB: aiws
+          POSTGRES_USER: aiws
+          POSTGRES_PASSWORD: e2e-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiws -d aiws"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+
+      - name: Build backend runtime
+        run: ./mvnw -B -ntp package -Dmaven.test.skip=true
+
+      - name: Start backend, register sample owner, and seed catalogue
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DB_URL=jdbc:postgresql://127.0.0.1:5432/aiws
+          export DB_USERNAME=aiws
+          export DB_PASSWORD=e2e-postgres-password
+          export DB_POOL_SIZE=5
+          export JWT_SIGNING_KEY="$(openssl rand -base64 32)"
+          export JWT_ISSUER=ai-watch-spaces-e2e
+          export INVITE_CODE_PEPPER="$(openssl rand -hex 32)"
+          export SERVER_PORT=8080
+          export AIWS_ASSETS_DIRECTORY=/tmp/aiws-e2e-assets
+          export AIWS_SEED_CONTENT_ENABLED=false
+          export AIWS_SEED_CONTENT_UPLOADED_BY=
+          mkdir -p "$AIWS_ASSETS_DIRECTORY"
+
+          app_jar="$(find target -maxdepth 1 -type f -name 'ai-watch-spaces-*.jar' ! -name '*-plain.jar' | head -n 1)"
+          test -n "$app_jar"
+
+          start_app() {
+            nohup java -jar "$app_jar" >/tmp/aiws-e2e-app.log 2>&1 &
+            APP_PID=$!
+          }
+
+          wait_ready() {
+            for _ in $(seq 1 90); do
+              if curl --silent --fail http://127.0.0.1:8080/actuator/health/readiness >/dev/null; then
+                return 0
+              fi
+              if ! kill -0 "$APP_PID" 2>/dev/null; then
+                cat /tmp/aiws-e2e-app.log
+                return 1
+              fi
+              sleep 2
+            done
+            cat /tmp/aiws-e2e-app.log
+            return 1
+          }
+
+          start_app
+          wait_ready
+
+          export E2E_HOST_EMAIL=e2e-host@example.test
+          export E2E_HOST_PASSWORD='E2E-Password-123!'
+          registration="$(curl --silent --show-error --fail \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$E2E_HOST_EMAIL\",\"password\":\"$E2E_HOST_PASSWORD\",\"displayName\":\"E2E Host\"}" \
+            http://127.0.0.1:8080/api/v1/auth/register)"
+          host_user_id="$(printf '%s' "$registration" | jq -er '.userId')"
+          echo "E2E_HOST_EMAIL=$E2E_HOST_EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_HOST_PASSWORD=$E2E_HOST_PASSWORD" >> "$GITHUB_ENV"
+
+          kill -TERM "$APP_PID"
+          wait "$APP_PID" || true
+
+          export AIWS_SEED_CONTENT_ENABLED=true
+          export AIWS_SEED_CONTENT_UPLOADED_BY="$host_user_id"
+          start_app
+          wait_ready
+
+      - name: Install frontend and Playwright
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run browser end-to-end tests
+        working-directory: frontend
+        env:
+          CI: "true"
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+        run: npm run test:e2e
+
+      - name: Upload browser reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
