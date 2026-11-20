@@ -89,6 +89,15 @@ export function authenticatedGet<T>(path: string, accessToken: string): Promise<
   });
 }
 
+/** Typed JSON POST helper for feature APIs that require an access token. */
+export function authenticatedPost<T>(path: string, accessToken: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 export const authApi = {
   register(email: string, password: string, displayName: string): Promise<RegisterResponse> {
     return request<RegisterResponse>('/auth/register', {
@@ -124,3 +133,4 @@ export const authApi = {
     });
   },
 };
+
