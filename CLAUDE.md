@@ -2,7 +2,7 @@
 
 Read `FULL_STACK_ARCHITECTURE.md`, `SYSTEM_DESIGN.md` (v0.4), and `DATABASE_SCHEMA.sql` (v0.4) before proposing or changing architecture. `FULL_STACK_ARCHITECTURE.md` is the approved full-stack scope (React + TypeScript frontend with the existing Java/Spring Boot backend). `SYSTEM_DESIGN.md` remains the detailed backend baseline, and `DATABASE_SCHEMA.sql` is the target state, not a migration.
 
-**Current checkpoint:** backend M1–M3 and frontend foundation/auth plus initial catalogue are implemented on `main`; catalogue detail integration is in draft PR #5. The current user has now authorized the non-AI watch-party MVP, including room lifecycle, synchronized playback, chat, and presence. Current scope explicitly defers subtitles/variations, timeline UI, recommendations, analytics, and AI features until the core product is usable. AI is planned as a later integration phase, not removed from the long-term product.
+**Current checkpoint:** `main` contains the non-AI watch-party MVP baseline merged in PR #7. Backend M1–M4 foundations include authentication, catalogue/timeline reads, room lifecycle, host-controlled playback, durable chat and heartbeat presence. PR #8 (`fix/watch-space-mvp-stability`) is the active stabilization branch, with PostgreSQL-backed membership/chat regressions and queue-failure recovery tests. Frontend scaffold/auth/catalogue and initial room UI are committed; TypeScript/build CI passes. Browser-based end-to-end verification of sign-in → catalogue → room → synchronized playback/chat is still outstanding. AI, subtitle/variation, recommendations, analytics and WebSocket transport remain later scope.
 
 ## Guardrails
 
