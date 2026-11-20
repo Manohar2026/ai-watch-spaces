@@ -52,6 +52,10 @@ A title requires a name, duration in seconds, default language, optional descrip
 
 Removing a title archives it instead of physically deleting its database row. Archived titles disappear from the published catalogue, while existing room records and historical references remain intact.
 
+## Deployment
+
+The current full-stack deployment target is Render. The root `render.yaml` Blueprint creates a single-origin Docker web service that serves both the React frontend and Spring Boot API, plus managed PostgreSQL. See [docs/deploy-render.md](docs/deploy-render.md) for setup, account promotion, sample catalogue seeding, and free-tier limitations.
+
 ## Requirements
 
 - JDK 21 (the Maven enforcer rejects other versions).

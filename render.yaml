@@ -1,0 +1,55 @@
+# Render Blueprint: React assets + Spring Boot API in one web service, backed by Render Postgres.
+services:
+  - type: web
+    name: ai-watch-spaces
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health/readiness
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: ai-watch-spaces-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: ai-watch-spaces-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: ai-watch-spaces-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: ai-watch-spaces-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: ai-watch-spaces-db
+          property: password
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=65.0 -XX:InitialRAMPercentage=20.0"
+      - key: JWT_SIGNING_KEY
+        generateValue: true
+      - key: JWT_ISSUER
+        value: ai-watch-spaces
+      - key: ACCESS_TOKEN_TTL
+        value: 15m
+      - key: INVITE_CODE_PEPPER
+        generateValue: true
+      - key: AIWS_ASSETS_DIRECTORY
+        value: /var/lib/aiws/assets
+      - key: AIWS_SEED_CONTENT_ENABLED
+        value: "false"
+
+databases:
+  - name: ai-watch-spaces-db
+    databaseName: aiws
+    user: aiws
+    plan: free
+    region: singapore
+    postgresMajorVersion: "17"
