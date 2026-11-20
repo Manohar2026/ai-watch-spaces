@@ -1,6 +1,6 @@
 # M4 Watch Space Lifecycle
 
-M4 starts the non-AI watch-party path: create a room for a published title, invite a friend, and manage the room lobby. Subtitle and timeline features are not required to create or start a room. Playback synchronization, chat, and live connection presence are later slices.
+M4 starts the non-AI watch-party path: create a room for a published title, invite a friend, manage the room lobby, and synchronize sample-title playback. Subtitle and timeline features are not required to create or start a room.
 
 ## API
 
@@ -15,8 +15,9 @@ All routes require a valid bearer access token.
 | `POST /api/v1/watch-spaces/{id}/start` | Host starts a scheduled room. This does not require a current timeline or subtitle track. |
 | `POST /api/v1/watch-spaces/{id}/end` | Host ends a room and closes active memberships. |
 | `POST /api/v1/watch-spaces/{id}/leave` | A viewer leaves; if the host leaves, the room ends. |
+| `POST /api/v1/watch-spaces/{id}/playback` | Host updates shared playback. Body: `{ "playbackState": "PLAYING", "positionMs": 12000 }`. Use `PAUSED` to pause or send a position to seek. |
 
-The room response includes the title's media URI and duration, the caller's role, the room status, and the active member list. The current member list is based on persisted room membership; WebSocket connection state is not implemented yet. The client refreshes the room to see membership changes.
+The room response includes the title's media URI and duration, the caller's role, the room status, shared playback state and timestamp, and the active member list. Clients poll the room every 1.2 seconds and correct playback drift against the server timestamp. The host controls play, pause, and seek; viewers follow. This first pass uses HTTP polling; WebSocket delivery and connection-based presence are not implemented yet.
 
 ## Local configuration
 
@@ -26,9 +27,8 @@ To seed the sample title, follow the opt-in steps in [m3-catalog-timeline.md](m3
 
 ## Current limits
 
-- Playback play, pause, seek, and synchronization are not implemented.
 - Chat and WebSocket presence are not implemented.
-- Participant changes in an open room require a manual refresh.
-- Create/join/start/end/leave changes are serialized through a bounded per-room mutation queue and persisted to PostgreSQL with room event sequence guards.
+- Participant changes in an open room appear on the next room poll.
+- Create/join/start/end/leave/playback changes are serialized through a bounded per-room mutation queue and persisted to PostgreSQL with room event sequence guards.
 - M4 code has not been run against a local PostgreSQL environment in this work session.
 
