@@ -66,7 +66,7 @@ The frontend and backend are separate deployable applications, but they are deve
 | HTTP | Shared typed API client; choose fetch or Axios during auth integration |
 | Realtime | Authenticated HTTP polling for MVP; WebSocket transport is deferred |
 | Styling | Responsive CSS with reusable design tokens and components |
-| Tests | Vitest and React Testing Library; browser-level tests can be added when core flows stabilize |
+| Tests | Playwright Chromium end-to-end coverage runs in CI; Vitest and React Testing Library unit/component coverage remain future additions |
 
 Keep dependencies lean. Add a library only when a concrete feature needs it.
 
