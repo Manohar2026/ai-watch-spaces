@@ -66,6 +66,29 @@ class WatchSpaceMembershipIT {
                 .jsonPath("$.myRole").isEqualTo("VIEWER")
                 .jsonPath("$.participantCount").isEqualTo(2);
 
+        client.post().uri("/api/v1/watch-spaces/{id}/heartbeat", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isNoContent();
+
+        client.post().uri("/api/v1/watch-spaces/{id}/start", roomId)
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("LIVE")
+                .jsonPath("$.playbackState").isEqualTo("PAUSED");
+
+        client.post().uri("/api/v1/watch-spaces/{id}/playback", roomId)
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("playbackState", "PLAYING", "positionMs", 12_000))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.playbackState").isEqualTo("PLAYING")
+                .jsonPath("$.playbackPositionMs").isEqualTo(12_000);
+
         Map<?, ?> sentMessage = client.post()
                 .uri("/api/v1/watch-spaces/{id}/chat", roomId)
                 .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
@@ -117,6 +140,15 @@ class WatchSpaceMembershipIT {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$[0].body").isEqualTo("Hello from the viewer.");
+
+        client.post().uri("/api/v1/watch-spaces/{id}/end", roomId)
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("ENDED")
+                .jsonPath("$.playbackState").isEqualTo("PAUSED")
+                .jsonPath("$.participantCount").isEqualTo(0);
 
         client.get().uri("/api/v1/watch-spaces/{id}", roomId)
                 .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))

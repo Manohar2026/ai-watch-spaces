@@ -115,7 +115,10 @@ public final class RoomMutationLanes {
         void execute(DbExecutor db, Runnable onComplete) {
             // Advance on success, empty completion, or error. Without doFinally, one failed
             // mutation leaves running=true and permanently blocks every later request for the room.
-            db.call(work).doFinally(signal -> onComplete.run()).subscribe(sink::success, sink::error);
+            db.call(work)
+                    .singleOptional()
+                    .doFinally(signal -> onComplete.run())
+                    .subscribe(result -> sink.success(result.orElse(null)), sink::error);
         }
     }
 }
