@@ -10,7 +10,7 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
   return (
     <main className="dashboard-shell">
       <header className="dashboard-topbar">
-        <a className="brand" href="/" aria-label="AI Watch Spaces home">
+        <a className="brand" href="/" aria-label="Watch Spaces home">
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
@@ -23,8 +23,7 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
         <p className="eyebrow"><span className="status-dot" /> YOU'RE SIGNED IN</p>
         <h1>Welcome,<br /><span>{user.displayName}.</span></h1>
         <p className="dashboard-lead">
-          Your Watch Spaces account is connected to the Spring Boot backend.
-          This is the starting point for your watch-space dashboard.
+          Your account is ready. Browse the sample catalogue and choose a title to watch with friends.
         </p>
 
         <article className="account-card">
@@ -38,7 +37,6 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
           <dl className="account-details">
             <div><dt>Display name</dt><dd>{user.displayName}</dd></div>
             <div><dt>Email</dt><dd>{user.email}</dd></div>
-            <div><dt>Subtitle locale</dt><dd>{user.subtitleLocale}</dd></div>
             <div><dt>User ID</dt><dd className="user-id">{user.id}</dd></div>
           </dl>
         </article>
@@ -52,11 +50,12 @@ export function Dashboard({ onBrowseCatalog }: { onBrowseCatalog(): void }) {
         <div className="next-step-card">
           <span className="next-step-icon">✦</span>
           <div>
-            <h3>Authentication is connected.</h3>
-            <p>Your catalogue now loads from the Spring Boot API. Watch spaces and room history will arrive in later milestones.</p>
+            <h3>Your watch spaces are coming together.</h3>
+            <p>Browse the catalogue now. Room creation, synchronized playback, chat, and presence are the next product features.</p>
           </div>
         </div>
       </section>
     </main>
   );
 }
+
