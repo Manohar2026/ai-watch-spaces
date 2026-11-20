@@ -89,7 +89,7 @@ function AppContent() {
           <p className="eyebrow"><span className="status-dot" /> YOUR PEOPLE. YOUR STORIES. IN SYNC.</p>
           <h1 id="hero-title">Some stories are<br />better <span>together.</span></h1>
           <p className="hero-description">
-            Bring your people into one watch space. Stay in sync, share reactions,
+            Bring your people into one watch space. Stay in sync, share the moment,
             and enjoy the story together.
           </p>
           <div className="hero-actions">
