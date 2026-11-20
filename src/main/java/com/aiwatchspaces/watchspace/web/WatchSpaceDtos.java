@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public final class WatchSpaceDtos {
@@ -26,6 +27,10 @@ public final class WatchSpaceDtos {
         public String toString() {
             return "JoinByCodeRequest[inviteCode=<redacted>]";
         }
+    }
+
+    public record PlaybackRequest(@NotNull @Pattern(regexp = "PLAYING|PAUSED") String playbackState,
+                                  @Min(0) int positionMs) {
     }
 
     public record RoomCreatedResponse(RoomResponse room, String inviteCode) {
