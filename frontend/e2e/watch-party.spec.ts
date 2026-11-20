@@ -24,7 +24,6 @@ async function registerThroughUi(page: Page, displayName: string, email: string,
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Your account has been created');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Good to see you again.' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Welcome,/ })).toBeVisible();
