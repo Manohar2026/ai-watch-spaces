@@ -9,7 +9,7 @@ Watch Spaces is a full-stack web application for discovering sample titles and w
 - **Frontend:** React 19 + TypeScript + Vite 8, located in `frontend/`.
 - **Backend:** Java 21 / Spring Boot 4.1.2 modular monolith, retained at the repository root.
 - **Database:** PostgreSQL 17 with Flyway migrations.
-- **Realtime:** WebSocket-based watch-space synchronization, chat, and presence.
+- **Realtime:** authenticated HTTP polling for shared playback, chat, and presence in the MVP; WebSockets remain a later transport upgrade.
 - **API base path:** `/api/v1`.
 
 See [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) for the approved full-stack architecture, frontend/backend boundaries, integration rules, and delivery milestones.
@@ -21,12 +21,12 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Backend M1:** infrastructure and application scaffold.
 - **Backend M2:** Flyway V1 and authentication (register, login, refresh with replay detection, logout, `/me`).
 - **Backend M3 (draft PR #3):** Flyway V2, timeline JSON Schema v1, sample title/timeline/subtitles, published catalogue and timeline/subtitle read APIs. GitHub Actions `./mvnw -B verify` passed on the final M3 source commit: 67 unit tests and 71 integration tests, with zero failures, errors, or skips. See [docs/m3-catalog-timeline.md](docs/m3-catalog-timeline.md).
-- **Backend M4 (in progress):** Flyway V3 room tables, authenticated room lifecycle, hashed invite codes, and host-controlled shared playback state. Verification has not been run yet.
+- **Backend M4 (in progress):** Flyway V3/V4 room and chat tables, authenticated room lifecycle, hashed invite codes, host-controlled shared playback, durable chat, and heartbeat presence. Verification has not been run yet.
 - **Frontend F0:** full-stack architecture documented.
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
 - **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; browser verification against a local backend is pending.
 - **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
-- **Frontend room (in progress):** create or join a room, view members, start/end/leave, and follow host-controlled sample-video playback. Chat and live connection presence remain future milestones.
+- **Frontend room (in progress):** create/join/lifecycle, follow host playback, send/read chat, and see online/away status. Verification has not been run yet.
 
 ## Current product scope
 
