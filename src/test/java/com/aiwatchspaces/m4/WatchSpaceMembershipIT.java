@@ -66,6 +66,24 @@ class WatchSpaceMembershipIT {
                 .jsonPath("$.myRole").isEqualTo("VIEWER")
                 .jsonPath("$.participantCount").isEqualTo(2);
 
+        Map<?, ?> sentMessage = client.post()
+                .uri("/api/v1/watch-spaces/{id}/chat", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("body", "Hello from the viewer."))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(Map.class).returnResult().getResponseBody();
+        assertThat(sentMessage).isNotNull();
+        assertThat(sentMessage.get("body")).isEqualTo("Hello from the viewer.");
+
+        client.get().uri("/api/v1/watch-spaces/{id}/chat?afterSequence=0&limit=50", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].body").isEqualTo("Hello from the viewer.");
+
         Map<?, ?> afterLeave = client.post()
                 .uri("/api/v1/watch-spaces/{id}/leave", roomId)
                 .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
@@ -87,6 +105,18 @@ class WatchSpaceMembershipIT {
                 .expectStatus().isForbidden()
                 .expectBody()
                 .jsonPath("$.code").isEqualTo("NOT_ROOM_MEMBER");
+
+        client.get().uri("/api/v1/watch-spaces/{id}/chat?afterSequence=0&limit=50", roomId)
+                .headers(headers -> headers.setBearerAuth(viewer.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isForbidden();
+
+        client.get().uri("/api/v1/watch-spaces/{id}/chat?afterSequence=0&limit=50", roomId)
+                .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].body").isEqualTo("Hello from the viewer.");
 
         client.get().uri("/api/v1/watch-spaces/{id}", roomId)
                 .headers(headers -> headers.setBearerAuth(host.tokens().accessToken()))
