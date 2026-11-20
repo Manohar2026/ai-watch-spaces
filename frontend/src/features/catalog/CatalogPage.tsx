@@ -408,12 +408,12 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
             <h2 id="add-title-heading">Add a title.</h2>
             <p className="detail-description">Add a direct video URL and basic details. The title will be available to everyone using this catalogue.</p>
             <form className="add-title-form" onSubmit={(event) => void createCatalogTitle(event)}>
-              <label>Title name<input required maxLength={200} value={titleDraft.name} onChange={(event) => setTitleDraft((current) => ({ ...current, name: event.currentTarget.value }))} placeholder="e.g. The First Bloom" /></label>
-              <label>Description<textarea maxLength={5000} rows={3} value={titleDraft.description} onChange={(event) => setTitleDraft((current) => ({ ...current, description: event.currentTarget.value }))} placeholder="What is this video about?" /></label>
-              <label>Direct video URL<input required type="url" maxLength={2000} value={titleDraft.videoAssetUri} onChange={(event) => setTitleDraft((current) => ({ ...current, videoAssetUri: event.currentTarget.value }))} placeholder="https://example.com/video.mp4" /></label>
+              <label>Title name<input required maxLength={200} value={titleDraft.name} onChange={(event) => { const value = event.currentTarget.value; setTitleDraft((current) => ({ ...current, name: value })); }} placeholder="e.g. The First Bloom" /></label>
+              <label>Description<textarea maxLength={5000} rows={3} value={titleDraft.description} onChange={(event) => { const value = event.currentTarget.value; setTitleDraft((current) => ({ ...current, description: value })); }} placeholder="What is this video about?" /></label>
+              <label>Direct video URL<input required type="url" maxLength={2000} value={titleDraft.videoAssetUri} onChange={(event) => { const value = event.currentTarget.value; setTitleDraft((current) => ({ ...current, videoAssetUri: value })); }} placeholder="https://example.com/video.mp4" /></label>
               <div className="add-title-form-row">
-                <label>Duration (seconds)<input required type="number" min={1} max={86400} step={1} value={titleDraft.durationSeconds} onChange={(event) => setTitleDraft((current) => ({ ...current, durationSeconds: event.currentTarget.value }))} placeholder="120" /></label>
-                <label>Genres<input maxLength={800} value={titleDraft.genres} onChange={(event) => setTitleDraft((current) => ({ ...current, genres: event.currentTarget.value }))} placeholder="nature, comedy" /></label>
+                <label>Duration (seconds)<input required type="number" min={1} max={86400} step={1} value={titleDraft.durationSeconds} onChange={(event) => { const value = event.currentTarget.value; setTitleDraft((current) => ({ ...current, durationSeconds: value })); }} placeholder="120" /></label>
+                <label>Genres<input maxLength={800} value={titleDraft.genres} onChange={(event) => { const value = event.currentTarget.value; setTitleDraft((current) => ({ ...current, genres: value })); }} placeholder="nature, comedy" /></label>
               </div>
               {createTitleError && <p className="room-action-error" role="alert">{createTitleError}</p>}
               <button className="primary-button" type="submit" disabled={createTitlePending}>{createTitlePending ? 'Adding title…' : 'Add to catalogue'} <span aria-hidden="true">→</span></button>
