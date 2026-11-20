@@ -2,6 +2,7 @@ package com.aiwatchspaces.chat;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -59,7 +60,7 @@ public class ChatService {
                 INSERT INTO room_events (id, watch_space_id, sequence_no, actor_user_id, event_type, payload, occurred_at)
                 VALUES (:eventId, :roomId, :sequence, :actor, 'CHAT_MESSAGE_POSTED', CAST(:payload AS jsonb), :now)
                 """, Map.of("eventId", eventId, "roomId", roomId, "sequence", sequence, "actor", actor.userId(),
-                "payload", "{\"messageId\":\"" + messageId + "\"}", "now", now));
+                "payload", "{\"messageId\":\"" + messageId + "\"}", "now", Timestamp.from(now)));
         int advanced = jdbc.update("""
                 UPDATE watch_spaces SET last_sequence_no = :next, state_version = state_version + 1
                 WHERE id = :id AND last_sequence_no = :expected
@@ -69,7 +70,7 @@ public class ChatService {
                 INSERT INTO chat_messages (id, watch_space_id, room_event_id, user_id, message_type, body, created_at)
                 VALUES (:id, :roomId, :eventId, :userId, 'CHAT', :body, :createdAt)
                 """, Map.of("id", messageId, "roomId", roomId, "eventId", eventId, "userId", actor.userId(),
-                "body", body, "createdAt", now));
+                "body", body, "createdAt", Timestamp.from(now)));
         return jdbc.queryForObject("""
                 SELECT m.id, m.user_id, u.display_name, m.body, e.sequence_no, m.created_at
                 FROM chat_messages m JOIN app_users u ON u.id = m.user_id

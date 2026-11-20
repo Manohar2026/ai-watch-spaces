@@ -2,6 +2,7 @@ package com.aiwatchspaces.watchspace;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -93,12 +94,12 @@ public class WatchSpaceService {
                 .addValue("privacy", privacy)
                 .addValue("inviteHash", code.hash())
                 .addValue("maxParticipants", maxParticipants)
-                .addValue("now", now));
+                .addValue("now", Timestamp.from(now)));
 
         jdbc.update("""
                 INSERT INTO watch_space_participants (id, watch_space_id, user_id, joined_at, last_seen_at)
                 VALUES (:id, :roomId, :userId, :now, :now)
-                """, Map.of("id", UUID.randomUUID(), "roomId", roomId, "userId", actor.userId(), "now", now));
+                """, Map.of("id", UUID.randomUUID(), "roomId", roomId, "userId", actor.userId(), "now", Timestamp.from(now)));
         appendEvent(roomId, 1, actor.userId(), "ROOM_CREATED", "{}", now);
         appendEvent(roomId, 2, actor.userId(), "PARTICIPANT_JOINED",
                 "{\"userId\":\"" + actor.userId() + "\"}", now);
@@ -188,7 +189,7 @@ public class WatchSpaceService {
         jdbc.update("""
                 UPDATE watch_space_participants SET last_seen_at = :now
                 WHERE watch_space_id = :roomId AND user_id = :userId AND left_at IS NULL
-                """, Map.of("now", mutationInstant(), "roomId", roomId, "userId", actor.userId()));
+                """, Map.of("now", Timestamp.from(mutationInstant()), "roomId", roomId, "userId", actor.userId()));
     }
 
     @Transactional
@@ -207,7 +208,7 @@ public class WatchSpaceService {
         jdbc.update("""
                 UPDATE watch_space_participants SET left_at = :now, leave_reason = 'LEFT'
                 WHERE watch_space_id = :roomId AND user_id = :userId AND left_at IS NULL
-                """, Map.of("now", now, "roomId", roomId, "userId", actor.userId()));
+                """, Map.of("now", Timestamp.from(now), "roomId", roomId, "userId", actor.userId()));
         long sequence = room.lastSequenceNo() + 1;
         appendEvent(roomId, sequence, actor.userId(), "PARTICIPANT_LEFT",
                 "{\"userId\":\"" + actor.userId() + "\"}", now);
@@ -236,7 +237,7 @@ public class WatchSpaceService {
                 SET status = 'LIVE', started_at = :now, session_correlation_id = :sessionId,
                     playback_state = 'PAUSED', last_playback_position_ms = 0, playback_updated_at = :now
                 WHERE id = :id AND status = 'SCHEDULED'
-                """, Map.of("now", now, "sessionId", sessionId, "id", roomId));
+                """, Map.of("now", Timestamp.from(now), "sessionId", sessionId, "id", roomId));
         appendEvent(roomId, sequence, actor.userId(), "ROOM_STARTED", "{}", now);
         advanceRoom(roomId, room.lastSequenceNo(), sequence);
         return loadRoom(roomId, actor.userId());
@@ -258,7 +259,7 @@ public class WatchSpaceService {
                 UPDATE watch_spaces SET playback_state = :state, last_playback_position_ms = :position,
                     playback_updated_at = :now
                 WHERE id = :id AND status = 'LIVE'
-                """, Map.of("state", request.playbackState(), "position", position, "now", now, "id", roomId));
+                """, Map.of("state", request.playbackState(), "position", position, "now", Timestamp.from(now), "id", roomId));
         appendEvent(roomId, sequence, actor.userId(), eventType,
                 "{\"playbackState\":\"" + request.playbackState() + "\",\"positionMs\":" + position + "}", now);
         advanceRoom(roomId, room.lastSequenceNo(), sequence);
@@ -278,12 +279,12 @@ public class WatchSpaceService {
                 UPDATE watch_space_participants
                 SET left_at = :now, leave_reason = 'ROOM_ENDED'
                 WHERE watch_space_id = :roomId AND left_at IS NULL
-                """, Map.of("now", now, "roomId", roomId));
+                """, Map.of("now", Timestamp.from(now), "roomId", roomId));
         jdbc.update("""
                 UPDATE watch_spaces SET status = 'ENDED', ended_reason = 'HOST_ENDED', ended_at = :now,
                     playback_state = 'PAUSED'
                 WHERE id = :id AND status <> 'ENDED'
-                """, Map.of("now", now, "id", roomId));
+                """, Map.of("now", Timestamp.from(now), "id", roomId));
         appendEvent(roomId, sequence, actor.userId(), "ROOM_ENDED", "{\"reason\":\"HOST_ENDED\"}", now);
         advanceRoom(roomId, room.lastSequenceNo(), sequence);
         return loadRoom(roomId, actor.userId());
@@ -301,7 +302,7 @@ public class WatchSpaceService {
                 WHERE p.watch_space_id = :roomId AND p.left_at IS NULL
                 ORDER BY p.joined_at, u.id
                 """, Map.of("roomId", roomId, "hostId", room.hostUserId(),
-                        "presenceCutoff", mutationInstant().minusSeconds(PRESENCE_WINDOW_SECONDS)),
+                        "presenceCutoff", Timestamp.from(mutationInstant().minusSeconds(PRESENCE_WINDOW_SECONDS))),
                 (rs, rowNum) -> new RoomParticipantResponse(rs.getObject("id", UUID.class),
                         rs.getString("display_name"), rs.getString("room_role"), rs.getBoolean("online")));
         return new RoomResponse(room.id(), room.titleId(), room.titleName(), room.videoAssetUri(), room.durationMs(),
@@ -404,7 +405,7 @@ public class WatchSpaceService {
                                          event_type, payload, occurred_at)
                 VALUES (:id, :roomId, :sequence, :actor, :eventType, CAST(:payload AS jsonb), :now)
                 """, Map.of("id", UUID.randomUUID(), "roomId", roomId, "sequence", sequence,
-                "actor", actor, "eventType", eventType, "payload", payload, "now", now));
+                "actor", actor, "eventType", eventType, "payload", payload, "now", Timestamp.from(now)));
     }
 
     private void advanceRoom(UUID roomId, long expected, long next) {

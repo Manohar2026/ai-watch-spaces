@@ -20,7 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /**
- * Flyway V1 + V2 must produce exactly the identity/catalogue/timeline slice of DATABASE_SCHEMA.sql.
+ * Flyway V1..V4 must produce exactly the active identity/catalogue/room/chat schema slices of DATABASE_SCHEMA.sql.
  * The canonical slice is applied in a fresh PostgreSQL database and compared to the migrated
  * application database: tables, columns, constraints and indexes.
  */
@@ -30,6 +30,9 @@ class V2MigrationMatchesTargetSchemaIT {
     private static final String V1_START = "-- Identity and authentication (modules: users, auth)";
     private static final String V2_START = "-- Catalogue (module: catalog)";
     private static final String V3_START = "-- Watch Spaces, membership and moderation (module: watchspace)";
+    private static final String AI_START = "-- AI Q&A, citations and pinned facts (module: ai)";
+    private static final String V4_START = "-- Chat history (module: chat). Written in the same transaction as its ledger event.";
+    private static final String VOTES_START = "-- Votes and applied variations (module: variations)";
 
     private static final String TABLES = """
             SELECT table_name FROM information_schema.tables
@@ -55,17 +58,25 @@ class V2MigrationMatchesTargetSchemaIT {
     DataSource dataSource;
 
     @Test
-    void v1AndV2MigrationsEqualTheCanonicalTargetSchemaSlices() throws Exception {
+    void v1ThroughV4MigrationsEqualTheCanonicalTargetSchemaSlices() throws Exception {
         String schema = Files.readString(Path.of("DATABASE_SCHEMA.sql"));
         int v1Start = schema.indexOf(V1_START);
         int v2Start = schema.indexOf(V2_START);
         int v3Start = schema.indexOf(V3_START);
+        int aiStart = schema.indexOf(AI_START);
+        int v4Start = schema.indexOf(V4_START);
+        int votesStart = schema.indexOf(VOTES_START);
         assertThat(v1Start).isGreaterThanOrEqualTo(0);
         assertThat(v2Start).isGreaterThan(v1Start);
         assertThat(v3Start).isGreaterThan(v2Start);
+        assertThat(aiStart).isGreaterThan(v3Start);
+        assertThat(v4Start).isGreaterThan(aiStart);
+        assertThat(votesStart).isGreaterThan(v4Start);
 
         String v1Slice = schema.substring(v1Start, v2Start);
         String v2Slice = schema.substring(v2Start, v3Start);
+        String v3Slice = schema.substring(v3Start, aiStart);
+        String v4Slice = schema.substring(v4Start, votesStart);
         assertThat(v1Slice).contains("CREATE TABLE app_users", "CREATE TABLE refresh_tokens");
         assertThat(v2Slice).contains(
                 "CREATE TABLE titles",
@@ -74,9 +85,16 @@ class V2MigrationMatchesTargetSchemaIT {
                 "CREATE TABLE subtitle_tracks",
                 "CREATE TABLE subtitle_cues",
                 "CREATE TABLE variation_options");
+        assertThat(v3Slice).contains(
+                "CREATE TABLE watch_spaces",
+                "CREATE TABLE room_subtitle_tracks",
+                "CREATE TABLE watch_space_participants",
+                "CREATE TABLE watch_space_moderation",
+                "CREATE TABLE room_events");
+        assertThat(v4Slice).contains("CREATE TABLE chat_messages");
 
         HikariDataSource hikari = dataSource.unwrap(HikariDataSource.class);
-        String targetDb = "target_v2_" + System.nanoTime();
+        String targetDb = "target_v4_" + System.nanoTime();
         migrated.execute("CREATE DATABASE " + targetDb);
         String targetUrl = hikari.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + targetDb + "$1");
 
@@ -84,6 +102,8 @@ class V2MigrationMatchesTargetSchemaIT {
             try (Statement statement = connection.createStatement()) {
                 statement.execute(v1Slice);
                 statement.execute(v2Slice);
+                statement.execute(v3Slice);
+                statement.execute(v4Slice);
             }
             JdbcTemplate target = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
 
