@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDuration } from '../catalog/catalogApi';
-import { watchSpaceApi, type WatchSpace } from './watchSpaceApi';
+import { watchSpaceApi, type ChatMessage, type WatchSpace } from './watchSpaceApi';
 
 interface WatchSpacePageProps {
   initialRoom: WatchSpace;
@@ -34,6 +34,10 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [seekPosition, setSeekPosition] = useState(initialRoom.playbackPositionMs);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatPending, setChatPending] = useState(false);
+  const chatCursor = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isHost = room.myRole === 'HOST';
 
@@ -67,6 +71,34 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
     }, 1200);
     return () => window.clearInterval(timer);
   }, [initialRoom.watchSpaceId]);
+
+  useEffect(() => {
+    let inFlight = false;
+    const heartbeat = () => void authorized((token) => watchSpaceApi.heartbeat(token, initialRoom.watchSpaceId)).catch(() => undefined);
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 10000);
+    return () => window.clearInterval(timer);
+  }, [initialRoom.watchSpaceId]);
+
+  useEffect(() => {
+    let inFlight = false;
+    const timer = window.setInterval(async () => {
+      if (inFlight || document.visibilityState === 'hidden' || room.status === 'ENDED') return;
+      inFlight = true;
+      try {
+        const fresh = await authorized((token) => watchSpaceApi.chatHistory(token, initialRoom.watchSpaceId, chatCursor.current));
+        if (fresh.length) {
+          chatCursor.current = Math.max(chatCursor.current, ...fresh.map((message) => message.sequenceNo));
+          setMessages((current) => [...new Map<string, ChatMessage>([...current, ...fresh].map((message): [string, ChatMessage] => [message.id, message])).values()].slice(-50));
+        }
+      } catch {
+        // Keep the room usable if chat is temporarily unavailable; the next poll retries.
+      } finally {
+        inFlight = false;
+      }
+    }, 1600);
+    return () => window.clearInterval(timer);
+  }, [initialRoom.watchSpaceId, room.status]);
 
   async function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
     let token = getAccessToken();
@@ -116,6 +148,25 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       setCopyState('failed');
     }
     window.setTimeout(() => setCopyState('idle'), 2500);
+  }
+
+  async function sendChat(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = chatDraft.trim();
+    if (!body || chatPending) return;
+    setChatPending(true);
+    setError(null);
+    try {
+      const message = await authorized((token) => watchSpaceApi.sendChat(token, room.watchSpaceId, body));
+      chatCursor.current = Math.max(chatCursor.current, message.sequenceNo);
+      setMessages((current) => [...new Map<string, ChatMessage>([...current, message].map((item): [string, ChatMessage] => [item.id, item])).values()].slice(-50));
+      setChatDraft('');
+    } catch (chatError) {
+      setError(errorMessage(chatError));
+      if (chatError instanceof ApiError && chatError.status === 401) await logout();
+    } finally {
+      setChatPending(false);
+    }
   }
 
   return (
@@ -176,7 +227,7 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
                   ? 'This room has ended. Return to the catalogue to start another watch space.'
                   : 'Share the invite code with friends. Room membership is saved, and the watch room will remember who has joined.'}
               </p>
-              {room.status === 'LIVE' && <div className="room-next-step"><span className="room-next-icon" aria-hidden="true">◷</span><p>The host controls shared playback. Chat and online presence are next.</p></div>}
+              {room.status === 'LIVE' && <div className="room-next-step"><span className="room-next-icon" aria-hidden="true">◷</span><p>Shared playback, room chat, and online status are active for this room.</p></div>}
               <div className="room-actions">
                 {isHost && room.status === 'SCHEDULED' && (
                   <button className="primary-button" type="button" disabled={pending} onClick={() => void runRoomAction((token) => watchSpaceApi.start(token, room.watchSpaceId))}>
@@ -202,13 +253,22 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
               <ul className="room-people-list">
                 {room.participants.map((person, index) => (
                   <li key={person.userId}>
-                    <span className={`room-avatar room-avatar-${index % 4}`}>{person.displayName.slice(0, 1).toUpperCase()}</span>
+                    <span className={`room-avatar room-avatar-${index % 4} ${person.online ? 'room-avatar-online' : 'room-avatar-offline'}`}>{person.displayName.slice(0, 1).toUpperCase()}</span>
                     <span className="room-person-name">{person.displayName}</span>
-                    <span className="room-person-role">{person.roomRole === 'HOST' ? 'HOST' : 'MEMBER'}</span>
+                    <span className="room-person-role">{person.online ? 'ONLINE' : 'AWAY'}{person.roomRole === 'HOST' ? ' · HOST' : ''}</span>
                   </li>
                 ))}
                 {room.participants.length === 0 && <li className="room-empty-people">No active participants.</li>}
               </ul>
+            </section>
+
+            <section className="room-panel chat-panel" aria-labelledby="chat-title">
+              <div className="room-panel-heading"><div><p className="eyebrow">THE CONVERSATION</p><h2 id="chat-title">Room chat</h2></div><span className="room-people-count">LIVE</span></div>
+              <ol className="chat-message-list" aria-live="polite">
+                {messages.map((message) => <li key={message.id}><strong>{message.displayName}</strong><p>{message.body}</p></li>)}
+                {!messages.length && <li className="chat-empty">Say hello to the room.</li>}
+              </ol>
+              {room.status !== 'ENDED' && <form className="chat-compose" onSubmit={(event) => void sendChat(event)}><input maxLength={2000} value={chatDraft} onChange={(event) => setChatDraft(event.currentTarget.value)} placeholder="Write a message…" aria-label="Chat message" /><button type="submit" disabled={chatPending || !chatDraft.trim()}>{chatPending ? '…' : 'Send'}</button></form>}
             </section>
 
             {inviteCode && (
