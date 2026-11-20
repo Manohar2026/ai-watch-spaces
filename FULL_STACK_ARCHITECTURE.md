@@ -1,4 +1,4 @@
-# AI Watch Spaces — Full-Stack Architecture Addendum
+# Watch Spaces — Full-Stack Architecture
 
 **Status:** Full-stack direction approved by the project owner on 2026-11-04.
 **Applies to:** The existing repository and the approved AI Watch Spaces PRD.
@@ -6,7 +6,18 @@
 
 ## 1. Product direction
 
-AI Watch Spaces is a full-stack web application for people to discover content, create or join synchronized social watch spaces, communicate while watching, and use AI-assisted interactive content features.
+Watch Spaces is a full-stack web application for people to discover sample content, create or join synchronized watch spaces, and communicate while watching. The product will be built and demonstrated as a normal, non-AI site first. AI-assisted features may be integrated later against the working catalogue, timeline, room, playback, and chat APIs.
+
+### Immediate MVP scope
+
+- Account registration, sign-in, and sign-out.
+- Browse the published sample catalogue.
+- Create a watch space for a title and share an invite code/link.
+- Join and leave a watch space.
+- Play a sample title with host-controlled, server-authoritative playback synchronization.
+- Show room participants and live chat.
+
+Defer subtitle tracks and variants, timeline panels and trivia, AI Q&A, recommendations, voting, analytics, and admin timeline authoring. Keep the existing catalogue and timeline foundation in place, but do not make these deferred features prerequisites for the watch-party MVP. The AI phase should integrate with the stable APIs after the normal product is usable.
 
 The project will be delivered as one Git repository containing two separately built applications:
 
@@ -114,12 +125,12 @@ Organize frontend code by product feature rather than creating one large collect
 | `watchspace` | Create/join room, room lifecycle, host and participant controls |
 | `player` | Media playback UI, authoritative playback state, drift display/correction |
 | `chat` | Persisted messages, reactions, typing and reconnect history |
-| `timeline` | Timeline-driven trivia, scenes, glossary and contextual facts |
-| `ai` | Grounded Q&A and source/citation presentation |
-| `variations` | Subtitle alternatives, voting and approved variation display |
-| `recommendations` | Personalized title recommendations and ratings |
-| `analytics` | Personal and past-room analytics |
-| `admin` | Catalogue and timeline metadata management |
+| `timeline` | Deferred metadata foundation; no timeline UI in the first MVP |
+| `ai` | Later integration phase: grounded Q&A and source/citation presentation |
+| `variations` | Deferred subtitle alternatives and voting |
+| `recommendations` | Deferred |
+| `analytics` | Deferred |
+| `admin` | Later catalogue/timeline management; sample data is sufficient for the first MVP |
 
 The backend remains authoritative for permissions, room state, playback sequencing, vote outcomes, and persisted messages. The browser must not invent or independently finalize those decisions.
 
@@ -155,12 +166,11 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 | F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
 | F2 | Authentication UI and API integration | Register/login/logout/current-user and in-memory automatic refresh code committed; end-to-end browser verification and persistent session-restoration design remain open |
 | F3 | App shell, dashboard and catalogue | Initial React catalogue UI consumes the published-title list/detail APIs; CI and local browser verification pending |
-| F4 | Watch-space lifecycle | Create, join, leave, lock, end and moderation flows integrated |
-| F5 | Player and realtime foundation | WebSocket connection, authoritative playback updates, reconnect/resync |
-| F6 | Chat and presence | Ordered history, live messages, typing, reactions and presence |
-| F7 | Timeline and AI features | Trivia, grounded Q&A with citations, subtitle variants and voting |
-| F8 | Recommendations and analytics | Ratings, recommendations, personal and room analytics |
-| F9 | Admin and release hardening | Admin workflows, accessibility, security, integration/e2e tests and deployment docs |
+| F4 | Watch-space lifecycle | Create, join, leave, start and end a room; share invite codes |
+| F5 | Synchronized player and realtime foundation | WebSocket connection, authoritative play/pause/seek, reconnect/resync |
+| F6 | Chat and presence | Ordered chat history, live messages, participant presence and reconnect state |
+| F7 | MVP polish and release | Responsive room UI, accessibility, security, setup and demo instructions |
+| Later | Timeline, subtitles, recommendations, analytics and AI integration | Add only after the non-AI watch-party path works end to end |
 
 Each milestone should include implementation, tests, manual verification instructions, and documentation updates. A milestone is not complete merely because its UI renders.
 
@@ -195,4 +205,5 @@ The existing `SYSTEM_DESIGN.md` remains the detailed backend design baseline. Wh
 
 ## 11. Immediate next step
 
-Complete F3 by passing frontend CI and verifying the catalogue/search/detail flow against a locally running backend. Separately, verify registration/login/profile/automatic refresh/logout against a locally running backend. Persistent session restoration remains a separate security decision; the current implementation intentionally loses the session on tab reload.
+Finish the current catalogue path and implement F4–F6 as one demonstrable user journey: sign in, select the sample title, create or join a room, play in sync, see who is present, and chat. Keep subtitle and AI systems out of this first room flow. Verify auth and catalogue against the local backend as part of bringing up the complete demo.
+
