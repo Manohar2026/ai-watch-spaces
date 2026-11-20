@@ -162,7 +162,7 @@ public class WatchSpaceService {
         jdbc.update("""
                 INSERT INTO watch_space_participants (id, watch_space_id, user_id, joined_at, last_seen_at)
                 VALUES (:id, :roomId, :userId, :now, :now)
-                """, Map.of("id", UUID.randomUUID(), "roomId", roomId, "userId", actor.userId(), "now", now));
+                """, Map.of("id", UUID.randomUUID(), "roomId", roomId, "userId", actor.userId(), "now", Timestamp.from(now)));
         appendEvent(roomId, room.lastSequenceNo() + 1, actor.userId(), "PARTICIPANT_JOINED",
                 "{\"userId\":\"" + actor.userId() + "\"}", now);
         advanceRoom(roomId, room.lastSequenceNo(), room.lastSequenceNo() + 1);
