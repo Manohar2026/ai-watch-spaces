@@ -164,7 +164,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
   return (
     <main className="catalog-shell">
       <header className="catalog-topbar">
-        <a className="brand" href="/" aria-label="Watch Spaces home">
+        <a className="brand" href="/" aria-label="Return to dashboard" onClick={(event) => { event.preventDefault(); onBack(); }}>
           <span className="brand-mark" aria-hidden="true">W</span>
           <span>watch<span className="brand-accent">spaces</span></span>
         </a>
