@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { catalogApi, formatDuration, type PageResponse, type TitleDetail, type TitleSummary } from './catalogApi';
@@ -33,6 +33,8 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [genre, setGenre] = useState('');
+  const [appliedGenre, setAppliedGenre] = useState('');
+  const detailRequestId = useRef(0);
   const [page, setPage] = useState(0);
   const [reloadVersion, setReloadVersion] = useState(0);
   const [result, setResult] = useState<PageResponse<TitleSummary> | null>(null);
@@ -79,7 +81,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
           page,
           size: PAGE_SIZE,
           query: appliedQuery,
-          genre,
+          genre: appliedGenre,
         }));
         if (!cancelled) {
           setResult(response);
@@ -97,9 +99,10 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [page, appliedQuery, genre, reloadVersion, getAccessToken, refreshAccessToken]);
+  }, [page, appliedQuery, appliedGenre, reloadVersion, getAccessToken, refreshAccessToken]);
 
   async function openTitle(titleId: string) {
+    const requestId = ++detailRequestId.current;
     setSelectedTitleId(titleId);
     setRoomError(null);
     setSelectedTitle(null);
@@ -107,9 +110,11 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     setDetailState('loading');
     try {
       const detail = await authorized((token) => catalogApi.get(token, titleId));
+      if (requestId !== detailRequestId.current) return;
       setSelectedTitle(detail);
       setDetailState('ready');
     } catch (detailLoadError) {
+      if (requestId !== detailRequestId.current) return;
       setDetailError(friendlyError(detailLoadError));
       setDetailState('error');
     }
@@ -148,12 +153,14 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     event.preventDefault();
     setPage(0);
     setAppliedQuery(query.trim());
+    setAppliedGenre(genre.trim());
   }
 
   function clearFilters() {
     setQuery('');
     setAppliedQuery('');
     setGenre('');
+    setAppliedGenre('');
     setPage(0);
   }
 
@@ -206,7 +213,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
             />
           </label>
           <button className="primary-button catalog-search-button" type="submit">Search <span aria-hidden="true">→</span></button>
-          {(appliedQuery || genre) && <button className="catalog-clear-button" type="button" onClick={clearFilters}>Clear</button>}
+          {(appliedQuery || appliedGenre) && <button className="catalog-clear-button" type="button" onClick={clearFilters}>Clear</button>}
         </form>
 
         {state === 'loading' && (
@@ -296,7 +303,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                           <source src={mediaUrl.href} type="video/mp4" />
                           Your browser does not support this video. <a href={mediaUrl.href}>Open the sample clip</a>.
                         </video>
-                        <p className="detail-note">Preview the sample title here. Shared rooms and synchronized playback are the next step.</p>
+                        <p className="detail-note">Preview the sample title here, then start a room to keep playback and chat in sync with your friends.</p>
                       </div>
                     ) : null;
                   } catch {
