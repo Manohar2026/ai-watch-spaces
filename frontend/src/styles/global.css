@@ -307,6 +307,12 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 .room-page-error { margin: -8px 0 22px; color: #ffadad; font-size: 11px; }
 .room-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr); gap: 20px; align-items: start; }
 .room-main-card, .room-panel { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #111720; }
+.shared-player { padding: 16px; background: #080b10; }
+.shared-player-video { display: block; width: 100%; max-height: min(58vh, 520px); aspect-ratio: 16 / 9; border-radius: 7px; background: #000; object-fit: contain; }
+.shared-player-controls { display: flex; align-items: center; gap: 16px; padding-top: 14px; color: #aeb8c5; font-size: 11px; }
+.shared-player-controls > p { margin: 0; }
+.shared-player-seek { display: flex; flex: 1; align-items: center; gap: 10px; }
+.shared-player-seek input { flex: 1; accent-color: #e29a66; }
 .room-art { position: relative; min-height: 285px; overflow: hidden; isolation: isolate; background: linear-gradient(140deg, #243c46, #657b5e 50%, #c18862); }
 .room-art::before, .room-art::after { position: absolute; z-index: -1; border: 1px solid rgba(255,255,255,0.15); border-radius: 50%; content: ''; }
 .room-art::before { width: 370px; height: 370px; top: -205px; right: -50px; }
