@@ -19,6 +19,7 @@ import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.CreateRoomRequest;
 import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.RoomCreatedResponse;
 import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.RoomParticipantResponse;
 import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.RoomResponse;
+import com.aiwatchspaces.watchspace.web.WatchSpaceDtos.PlaybackRequest;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -221,6 +222,29 @@ public class WatchSpaceService {
                 WHERE id = :id AND status = 'SCHEDULED'
                 """, Map.of("now", now, "sessionId", sessionId, "id", roomId));
         appendEvent(roomId, sequence, actor.userId(), "ROOM_STARTED", "{}", now);
+        advanceRoom(roomId, room.lastSequenceNo(), sequence);
+        return loadRoom(roomId, actor.userId());
+    }
+
+    @Transactional
+    public RoomResponse updatePlayback(UUID roomId, AuthenticatedUser actor, PlaybackRequest request) {
+        RoomRow room = lockRoom(roomId);
+        requireHost(room, actor.userId());
+        if (!room.status().equals("LIVE")) {
+            throw new ApiException(ErrorCode.ROOM_NOT_LIVE, "Start the watch space before controlling playback.");
+        }
+        int position = Math.min(request.positionMs(), room.durationMs());
+        String eventType = request.playbackState().equals(room.playbackState())
+                ? "PLAYBACK_SEEK" : (request.playbackState().equals("PLAYING") ? "PLAYBACK_PLAY" : "PLAYBACK_PAUSE");
+        Instant now = mutationInstant();
+        long sequence = room.lastSequenceNo() + 1;
+        jdbc.update("""
+                UPDATE watch_spaces SET playback_state = :state, last_playback_position_ms = :position,
+                    playback_updated_at = :now
+                WHERE id = :id AND status = 'LIVE'
+                """, Map.of("state", request.playbackState(), "position", position, "now", now, "id", roomId));
+        appendEvent(roomId, sequence, actor.userId(), eventType,
+                "{\"playbackState\":\"" + request.playbackState() + "\",\"positionMs\":" + position + "}", now);
         advanceRoom(roomId, room.lastSequenceNo(), sequence);
         return loadRoom(roomId, actor.userId());
     }
