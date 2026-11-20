@@ -24,7 +24,7 @@ The detailed backend design remains in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), and
 - **Backend M4 (implemented; stabilization PR #8):** Flyway V3/V4 room and chat tables, authenticated room lifecycle, hashed invite codes, host-controlled shared playback, durable chat, and heartbeat presence. GitHub Actions `./mvnw -B verify` passed against PostgreSQL 17 Testcontainers on PR head `e6eca16` (69 unit tests and 73 integration tests, zero failures).
 - **Frontend F0:** full-stack architecture documented.
 - **Frontend F1:** React + TypeScript + Vite scaffold committed; GitHub Actions dependency install, TypeScript check, and production build passed.
-- **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; browser verification against a local backend is pending.
+- **Frontend F2:** registration, login, authenticated `/me`, logout, typed API errors, automatic refresh-token rotation, and in-memory session state implemented; automated Chromium registration/login journey passes; manual local-device verification remains pending.
 - **Frontend F3 (in progress):** React catalogue screen with search, genre filtering, pagination and title details, integrated with M3 read APIs; CI and local browser verification are pending.
 - **Frontend room (in progress):** create/join/lifecycle, follow host playback, send/read chat, and see online/away status. Frontend CI passes; browser-based verification against a running local backend is still pending.
 
