@@ -166,7 +166,7 @@ Build and verify in small end-to-end increments. Do not build every screen befor
 | F0 | Full-stack architecture and repository conventions | Completed: architecture direction documented |
 | F1 | React + TypeScript + Vite scaffold | Scaffold committed; CI/local dependency install, typecheck and production build still need to pass |
 | F2 | Authentication UI and API integration | Register/login/logout/current-user and in-memory automatic refresh code committed; automated Chromium registration/login journey passes; local device verification and persistent session-restoration design remain open |
-| F3 | App shell, dashboard and catalogue | Initial React catalogue UI consumes the published-title list/detail APIs; CI and local browser verification pending |
+| F3 | App shell, dashboard and catalogue | Initial React catalogue UI consumes published-title list/detail APIs; automated Chromium catalogue journey passes; local device verification remains open |
 | F4 | Watch-space lifecycle | Create, join, leave, start and end a room; share invite codes |
 | F5 | Synchronized player and realtime foundation | Server-authoritative play/pause/seek with room-snapshot polling and drift correction |
 | F6 | Chat and presence | Ordered chat history, message polling, participant presence and heartbeat expiry |
