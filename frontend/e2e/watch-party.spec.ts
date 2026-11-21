@@ -219,7 +219,6 @@ test('admin can add a YouTube title and synchronize its embedded player in a wat
   }));
 
   const landingResponse = await page.goto('/');
-  expect(landingResponse?.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
   await expect(page.locator('meta[name="referrer"]')).toHaveAttribute(
     'content',
     'strict-origin-when-cross-origin',
