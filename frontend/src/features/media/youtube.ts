@@ -63,7 +63,7 @@ let apiPromise: Promise<YouTubeIframeApi> | null = null;
 export function getYouTubeVideoId(value: string): string | null {
   try {
     const url = new URL(value);
-    if (!YOUTUBE_HOSTS.has(url.hostname.toLowerCase())) return null;
+    if (!['http:', 'https:'].includes(url.protocol) || !YOUTUBE_HOSTS.has(url.hostname.toLowerCase())) return null;
 
     let videoId: string | null = null;
     if (url.hostname.toLowerCase().endsWith('youtu.be')) {
@@ -71,7 +71,7 @@ export function getYouTubeVideoId(value: string): string | null {
     } else if (url.pathname === '/watch') {
       videoId = url.searchParams.get('v');
     } else {
-      const match = url.pathname.match(/^\/(?:embed|shorts|live)\/([^/?#]+)/);
+      const match = url.pathname.match(/^\/(?:embed|shorts)\/([^/?#]+)/);
       videoId = match?.[1] ?? null;
     }
 
