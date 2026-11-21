@@ -440,6 +440,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
               <div className="catalog-create-row">
                 <label className="catalog-create-field" htmlFor="catalog-title-duration">Duration (seconds)
                   <input id="catalog-title-duration" type="number" min="1" max="86400" step="1" value={createDurationSeconds} onChange={(event) => setCreateDurationSeconds(event.currentTarget.value)} required />
+                  <small>For YouTube, enter the full video duration; the app uses it for the shared seek bar.</small>
                 </label>
                 <label className="catalog-create-field" htmlFor="catalog-title-locale">Default language
                   <input id="catalog-title-locale" value={createLocale} onChange={(event) => setCreateLocale(event.currentTarget.value)} maxLength={16} placeholder="en-IN" />
