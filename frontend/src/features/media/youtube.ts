@@ -59,7 +59,7 @@ declare global {
 
 let apiPromise: Promise<YouTubeIframeApi> | null = null;
 
-/** Extracts an 11-character video ID from supported YouTube watch, share, embed, Shorts, or live URLs. */
+/** Extracts an 11-character video ID from supported YouTube watch, share, embed, or Shorts URLs. */
 export function getYouTubeVideoId(value: string): string | null {
   try {
     const url = new URL(value);
@@ -83,7 +83,8 @@ export function getYouTubeVideoId(value: string): string | null {
 
 export function isYouTubeHostUrl(value: string): boolean {
   try {
-    return YOUTUBE_HOSTS.has(new URL(value).hostname.toLowerCase());
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && YOUTUBE_HOSTS.has(url.hostname.toLowerCase());
   } catch {
     return false;
   }
@@ -106,11 +107,17 @@ export function loadYouTubeIframeApi(): Promise<YouTubeIframeApi> {
       settled = true;
       resolve(api);
     };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      apiPromise = null;
+      reject(error);
+    };
 
     window.onYouTubeIframeAPIReady = () => {
       previousReady?.();
       if (window.YT?.Player) finish(window.YT);
-      else reject(new Error('The YouTube player API did not initialize.'));
+      else fail(new Error('The YouTube player API did not initialize.'));
     };
 
     const scriptUrl = 'https://www.youtube.com/iframe_api';
@@ -122,16 +129,12 @@ export function loadYouTubeIframeApi(): Promise<YouTubeIframeApi> {
       document.head.appendChild(script);
     }
     script.addEventListener('error', () => {
-      apiPromise = null;
-      reject(new Error('The YouTube player API could not be loaded.'));
+      fail(new Error('The YouTube player API could not be loaded.'));
     }, { once: true });
 
     window.setTimeout(() => {
       if (!settled && window.YT?.Player) finish(window.YT);
-      else if (!settled) {
-        apiPromise = null;
-        reject(new Error('Timed out while loading the YouTube player API.'));
-      }
+      else fail(new Error('Timed out while loading the YouTube player API.'));
     }, 15_000);
   });
 
