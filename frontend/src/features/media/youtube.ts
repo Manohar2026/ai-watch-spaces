@@ -144,7 +144,7 @@ export function loadYouTubeIframeApi(): Promise<YouTubeIframeApi> {
 export function getYouTubePlayerErrorMessage(code: number): string {
   if (code === 100) return 'This YouTube video is private, removed, or unavailable.';
   if (code === 101 || code === 150) return 'The video owner has disabled playback on other websites. Choose a video that allows embedding.';
-  if (code === 153) return 'YouTube could not verify the player origin. Reload the page and try again.';
+  if (code === 153) return 'YouTube did not receive the HTTP Referer required to identify this embedded player. Reload the page and try again.';
   if (code === 2) return 'The YouTube video ID is invalid.';
   if (code === 5) return 'The YouTube player could not decode this video.';
   return `This YouTube video could not be played (error ${code}). Try another embeddable video.`;

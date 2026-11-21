@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.server.authentication.ServerBearerTokenAuthenticationConverter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.ServerAuthenticationConverter;
+import org.springframework.security.web.server.header.ReferrerPolicyServerHttpHeadersWriter.ReferrerPolicy;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import reactor.core.publisher.Mono;
@@ -50,6 +51,10 @@ class SecurityConfig {
         ServerAccessDeniedHandler accessDenied = (exchange, e) ->
                 errors.write(exchange, ErrorCode.FORBIDDEN, "Access denied.");
         return http
+                // YouTube's embedded player requires an HTTP Referer. Send only this site's origin
+                // cross-origin, rather than suppressing the header with Spring Security's default.
+                .headers(headers -> headers.referrerPolicy(referrer -> referrer
+                        .policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
