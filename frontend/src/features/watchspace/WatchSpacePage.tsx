@@ -39,7 +39,11 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   const [chatDraft, setChatDraft] = useState('');
   const [chatPending, setChatPending] = useState(false);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [playerMuted, setPlayerMuted] = useState(false);
+  const [playerVolume, setPlayerVolume] = useState(100);
+  const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const chatCursor = useRef(0);
+  const playerShellRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const youtubeMountRef = useRef<HTMLDivElement>(null);
   const youtubePlayerRef = useRef<YouTubePlayer | null>(null);
@@ -110,6 +114,7 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
           disablekb: 1,
           playsinline: 1,
           rel: 0,
+          fs: 1,
           origin: window.location.origin,
         },
         events: {
@@ -119,6 +124,8 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
               return;
             }
             youtubePlayerRef.current = event.target;
+            setPlayerMuted(event.target.isMuted());
+            setPlayerVolume(event.target.getVolume());
             setError(null);
             applyRoom(roomRef.current);
           },
@@ -253,6 +260,83 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       setPlaybackBlocked(true);
     }
   }
+ 
+  function togglePlayerMute() {
+    const nextMuted = !playerMuted;
+    const player = youtubePlayerRef.current;
+    const video = videoRef.current;
+    if (youtubeVideoId && player) {
+      if (nextMuted) player.mute();
+      else player.unMute();
+    } else if (video) {
+      video.muted = nextMuted;
+    }
+    setPlayerMuted(nextMuted);
+  }
+
+  function changePlayerVolume(value: number) {
+    const nextVolume = Math.max(0, Math.min(100, value));
+    const player = youtubePlayerRef.current;
+    const video = videoRef.current;
+    if (youtubeVideoId && player) {
+      player.setVolume(nextVolume);
+      if (nextVolume > 0 && player.isMuted()) player.unMute();
+      if (nextVolume === 0 && !player.isMuted()) player.mute();
+    } else if (video) {
+      video.volume = nextVolume / 100;
+      video.muted = nextVolume === 0;
+    }
+    setPlayerVolume(nextVolume);
+    setPlayerMuted(nextVolume === 0);
+  }
+
+  async function togglePlayerFullscreen() {
+    const shell = playerShellRef.current;
+    if (!shell) return;
+
+    if (document.fullscreenElement === shell) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        setPlayerFullscreen(false);
+      }
+      return;
+    }
+
+    if (playerFullscreen && !document.fullscreenElement) {
+      setPlayerFullscreen(false);
+      return;
+    }
+
+    if (shell.requestFullscreen) {
+      try {
+        await shell.requestFullscreen();
+        setPlayerFullscreen(true);
+        return;
+      } catch {
+        // Use the CSS fullscreen fallback on browsers that reject element fullscreen.
+      }
+    }
+    setPlayerFullscreen(true);
+  }
+
+  useEffect(() => {
+    const shell = playerShellRef.current;
+    const syncFullscreenState = () => {
+      setPlayerFullscreen(Boolean(shell && document.fullscreenElement === shell));
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.fullscreenElement) {
+        setPlayerFullscreen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
 
   async function runRoomAction(action: (token: string) => Promise<WatchSpace>, exitAfter = false) {
     setPending(true);
@@ -360,7 +444,11 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
         <div className="room-grid">
           <section className="room-main-card" aria-labelledby="lobby-title">
             {room.status === 'LIVE' && (
-              <div className="shared-player">
+              <div
+                ref={playerShellRef}
+                className={`shared-player${playerFullscreen ? ' shared-player-fullscreen' : ''}`}
+                aria-label="Shared video player"
+              >
                 {youtubeVideoId ? (
                   <div className="shared-player-youtube">
                     <div ref={youtubeMountRef} />
@@ -381,47 +469,86 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
                   />
                 )}
                 <div className="shared-player-controls">
-                  {isHost ? (
-                    <>
-                      <button
-                        className="primary-button"
-                        type="button"
-                        disabled={pending}
-                        onClick={() => {
-                          const nextState = room.playbackState === 'PLAYING' ? 'PAUSED' : 'PLAYING';
-                          const position = Math.round((
-                            youtubeVideoId
-                              ? youtubePlayerRef.current?.getCurrentTime() ?? 0
-                              : videoRef.current?.currentTime ?? 0
-                          ) * 1000);
-                          if (nextState === 'PLAYING') void enableSynchronizedPlayback();
-                          else if (youtubeVideoId) youtubePlayerRef.current?.pauseVideo();
-                          else videoRef.current?.pause();
-                          void runRoomAction((token) =>
-                            watchSpaceApi.playback(token, room.watchSpaceId, nextState, position));
-                        }}
-                      >
-                        {room.playbackState === 'PLAYING' ? 'Pause for everyone' : 'Play for everyone'}
+                  <div className="shared-player-sync-controls">
+                    {isHost ? (
+                      <>
+                        <button
+                          className="primary-button"
+                          type="button"
+                          disabled={pending}
+                          onClick={() => {
+                            const nextState = room.playbackState === 'PLAYING' ? 'PAUSED' : 'PLAYING';
+                            const position = Math.round((
+                              youtubeVideoId
+                                ? youtubePlayerRef.current?.getCurrentTime() ?? 0
+                                : videoRef.current?.currentTime ?? 0
+                            ) * 1000);
+                            if (nextState === 'PLAYING') void enableSynchronizedPlayback();
+                            else if (youtubeVideoId) youtubePlayerRef.current?.pauseVideo();
+                            else videoRef.current?.pause();
+                            void runRoomAction((token) =>
+                              watchSpaceApi.playback(token, room.watchSpaceId, nextState, position));
+                          }}
+                        >
+                          {room.playbackState === 'PLAYING' ? 'Pause for everyone' : 'Play for everyone'}
+                        </button>
+                        <label className="shared-player-seek">{formatDuration(Math.round(seekPosition / 1000) * 1000)}
+                          <input
+                            type="range"
+                            min={0}
+                            max={room.durationMs}
+                            step={1000}
+                            value={Math.min(seekPosition, room.durationMs)}
+                            onChange={(event) => setSeekPosition(Number(event.currentTarget.value))}
+                            onPointerUp={() => void runRoomAction((token) =>
+                              watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))}
+                            onKeyUp={() => void runRoomAction((token) =>
+                              watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))}
+                            aria-label="Seek shared playback"
+                          />
+                          {formatDuration(room.durationMs)}
+                        </label>
+                      </>
+                    ) : <p>Following the host · {room.playbackState === 'PLAYING' ? 'Playing' : 'Paused'}</p>}
+                    {playbackBlocked && (
+                      <button className="room-secondary-action" type="button" onClick={() => void enableSynchronizedPlayback()}>
+                        Enable synchronized playback
                       </button>
-                      <label className="shared-player-seek">{formatDuration(Math.round(seekPosition / 1000) * 1000)}
-                        <input
-                          type="range"
-                          min={0}
-                          max={room.durationMs}
-                          step={1000}
-                          value={Math.min(seekPosition, room.durationMs)}
-                          onChange={(event) => setSeekPosition(Number(event.currentTarget.value))}
-                          onPointerUp={() => void runRoomAction((token) =>
-                            watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))}
-                          onKeyUp={() => void runRoomAction((token) =>
-                            watchSpaceApi.playback(token, room.watchSpaceId, room.playbackState === 'PLAYING' ? 'PLAYING' : 'PAUSED', seekPosition))}
-                          aria-label="Seek shared playback"
-                        />
-                        {formatDuration(room.durationMs)}
-                      </label>
-                    </>
-                  ) : <p>Following the host · {room.playbackState === 'PLAYING' ? 'Playing' : 'Paused'}</p>}
-                  {playbackBlocked && (
+                    )}
+                  </div>
+                  <div className="shared-player-local-controls" aria-label="Local player controls">
+                    <button
+                      className="room-player-control"
+                      type="button"
+                      onClick={togglePlayerMute}
+                      aria-label={playerMuted ? 'Unmute player' : 'Mute player'}
+                      title={playerMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {playerMuted ? 'Unmute' : 'Mute'}
+                    </button>
+                    <label className="shared-player-volume">
+                      <span>Volume</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={playerVolume}
+                        onChange={(event) => changePlayerVolume(Number(event.currentTarget.value))}
+                        aria-label="Player volume"
+                      />
+                    </label>
+                    <button
+                      className="room-player-control room-player-fullscreen"
+                      type="button"
+                      onClick={() => void togglePlayerFullscreen()}
+                      aria-label={playerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                      title={playerFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                    >
+                      {playerFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                    </button>
+                  </div>
+
                     <button className="room-secondary-action" type="button" onClick={() => void enableSynchronizedPlayback()}>
                       Enable synchronized playback
                     </button>

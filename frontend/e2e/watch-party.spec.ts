@@ -192,6 +192,8 @@ test('admin can add a YouTube title and synchronize its embedded player in a wat
             this.options = options;
             this.currentTime = 0;
             this.state = -1;
+            this.volume = 100;
+            this.muted = false;
             this.frame = document.createElement('iframe');
             this.frame.setAttribute('data-testid', 'youtube-room-frame');
             this.frame.setAttribute('data-player-state', '-1');
@@ -211,6 +213,20 @@ test('admin can add a YouTube title and synchronize its embedded player in a wat
           seekTo(seconds) { this.currentTime = seconds; }
           getCurrentTime() { return this.currentTime; }
           getPlayerState() { return this.state; }
+          setVolume(volume) {
+            this.volume = volume;
+            this.frame.setAttribute('data-volume', String(volume));
+          }
+          getVolume() { return this.volume; }
+          mute() {
+            this.muted = true;
+            this.frame.setAttribute('data-muted', 'true');
+          }
+          unMute() {
+            this.muted = false;
+            this.frame.setAttribute('data-muted', 'false');
+          }
+          isMuted() { return this.muted; }
           destroy() { this.frame.remove(); }
         }
       };
@@ -257,4 +273,17 @@ test('admin can add a YouTube title and synchronize its embedded player in a wat
   await page.getByRole('button', { name: 'Play for everyone' }).click();
   await expect(page.getByRole('button', { name: 'Pause for everyone' })).toBeVisible();
   await expect(playerFrame).toHaveAttribute('data-player-state', '1');
+
+  await page.getByRole('button', { name: 'Mute player' }).click();
+  await expect(page.getByRole('button', { name: 'Unmute player' })).toBeVisible();
+  await expect(playerFrame).toHaveAttribute('data-muted', 'true');
+  await page.getByLabel('Player volume').fill('65');
+  await expect(playerFrame).toHaveAttribute('data-volume', '65');
+  await expect(playerFrame).toHaveAttribute('data-muted', 'false');
+
+  const playerShell = page.locator('.shared-player');
+  await page.getByRole('button', { name: 'Enter fullscreen' }).click();
+  await expect(playerShell).toHaveClass(/shared-player-fullscreen/);
+  await page.getByRole('button', { name: 'Exit fullscreen' }).click();
+  await expect(playerShell).not.toHaveClass(/shared-player-fullscreen/);
 });
