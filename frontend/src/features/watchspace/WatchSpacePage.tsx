@@ -3,6 +3,7 @@ import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { formatDuration } from '../catalog/catalogApi';
 import { watchSpaceApi, type ChatMessage, type WatchSpace } from './watchSpaceApi';
+import { getYouTubePlayerErrorMessage, getYouTubeVideoId, loadYouTubeIframeApi, type YouTubePlayer } from '../media/youtube';
 
 interface WatchSpacePageProps {
   initialRoom: WatchSpace;
@@ -40,13 +41,47 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const chatCursor = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const youtubeMountRef = useRef<HTMLDivElement>(null);
+  const youtubePlayerRef = useRef<YouTubePlayer | null>(null);
+  const roomRef = useRef(room);
+  roomRef.current = room;
+  const youtubeVideoId = getYouTubeVideoId(room.videoAssetUri);
   const isHost = room.myRole === 'HOST';
   const isMutedForMe = room.participants.some((participant) => participant.userId === user?.id && participant.muted);
 
   function applyRoom(updated: WatchSpace) {
     setRoom(updated);
+    roomRef.current = updated;
     onRoomChange(updated);
     setSeekPosition(updated.playbackPositionMs);
+
+    const elapsedMs = updated.playbackState === 'PLAYING'
+      ? Math.max(0, Date.now() - Date.parse(updated.playbackUpdatedAt)) : 0;
+    const targetSeconds = Math.min(updated.durationMs, updated.playbackPositionMs + elapsedMs) / 1000;
+
+    if (youtubeVideoId) {
+      const player = youtubePlayerRef.current;
+      if (!player) return;
+      if (updated.status !== 'LIVE') {
+        player.pauseVideo();
+        setPlaybackBlocked(false);
+        return;
+      }
+      if (Math.abs(player.getCurrentTime() - targetSeconds) > 1.25) {
+        player.seekTo(targetSeconds, true);
+      }
+      const playerState = player.getPlayerState();
+      if (updated.playbackState === 'PLAYING'
+          && targetSeconds < updated.durationMs / 1000 - 0.25
+          && playerState !== 1) {
+        player.playVideo();
+      }
+      if (updated.playbackState === 'PAUSED' && playerState === 1) {
+        player.pauseVideo();
+      }
+      return;
+    }
+
     const video = videoRef.current;
     if (!video) return;
     if (updated.status !== 'LIVE') {
@@ -54,15 +89,69 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
       setPlaybackBlocked(false);
       return;
     }
-    const elapsedMs = updated.playbackState === 'PLAYING'
-      ? Math.max(0, Date.now() - Date.parse(updated.playbackUpdatedAt)) : 0;
-    const targetSeconds = Math.min(updated.durationMs, updated.playbackPositionMs + elapsedMs) / 1000;
     if (Math.abs(video.currentTime - targetSeconds) > 1.25) video.currentTime = targetSeconds;
     if (updated.playbackState === 'PLAYING' && targetSeconds < updated.durationMs / 1000 - 0.25 && video.paused) {
       void video.play().then(() => setPlaybackBlocked(false)).catch(() => setPlaybackBlocked(true));
     }
     if (updated.playbackState === 'PAUSED' && !video.paused) video.pause();
   }
+
+  useEffect(() => {
+    if (!youtubeVideoId || room.status !== 'LIVE') return;
+    let active = true;
+
+    void loadYouTubeIframeApi().then((api) => {
+      if (!active || !youtubeMountRef.current) return;
+      const player = new api.Player(youtubeMountRef.current, {
+        videoId: youtubeVideoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          playsinline: 1,
+          rel: 0,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady: (event) => {
+            if (!active) {
+              event.target.destroy();
+              return;
+            }
+            youtubePlayerRef.current = event.target;
+            setError(null);
+            applyRoom(roomRef.current);
+          },
+          onStateChange: (event) => {
+            if (event.data === api.PlayerState.PLAYING) setPlaybackBlocked(false);
+            if (event.data === api.PlayerState.ENDED) {
+              const currentRoom = roomRef.current;
+              if (currentRoom.myRole === 'HOST' && currentRoom.status === 'LIVE') {
+                void runRoomAction((token) => watchSpaceApi.playback(
+                  token, currentRoom.watchSpaceId, 'PAUSED', currentRoom.durationMs,
+                ));
+              }
+            }
+          },
+          onError: (event) => setError(getYouTubePlayerErrorMessage(event.data)),
+          onAutoplayBlocked: () => setPlaybackBlocked(true),
+        },
+      });
+      youtubePlayerRef.current = player;
+    }).catch((loadError: unknown) => {
+      if (active) {
+        setError(loadError instanceof Error
+          ? loadError.message
+          : 'The YouTube player could not be loaded. Check your connection and try again.');
+      }
+    });
+
+    return () => {
+      active = false;
+      youtubePlayerRef.current?.destroy();
+      youtubePlayerRef.current = null;
+    };
+  }, [youtubeVideoId, room.status]);
 
   useEffect(() => {
     if (room.status === 'ENDED') return;
@@ -145,6 +234,16 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
   }
 
   async function enableSynchronizedPlayback() {
+    if (youtubeVideoId) {
+      const player = youtubePlayerRef.current;
+      if (!player) {
+        setPlaybackBlocked(true);
+        return;
+      }
+      player.playVideo();
+      setPlaybackBlocked(false);
+      return;
+    }
     const video = videoRef.current;
     if (!video) return;
     try {
@@ -262,19 +361,25 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
           <section className="room-main-card" aria-labelledby="lobby-title">
             {room.status === 'LIVE' && (
               <div className="shared-player">
-                <video
-                  ref={videoRef}
-                  className="shared-player-video"
-                  src={room.videoAssetUri}
-                  playsInline
-                  preload="metadata"
-                  onEnded={() => {
-                    if (isHost && room.status === 'LIVE') {
-                      void runRoomAction((token) =>
-                        watchSpaceApi.playback(token, room.watchSpaceId, 'PAUSED', room.durationMs));
-                    }
-                  }}
-                />
+                {youtubeVideoId ? (
+                  <div className="shared-player-youtube">
+                    <div ref={youtubeMountRef} />
+                  </div>
+                ) : (
+                  <video
+                    ref={videoRef}
+                    className="shared-player-video"
+                    src={room.videoAssetUri}
+                    playsInline
+                    preload="metadata"
+                    onEnded={() => {
+                      if (isHost && room.status === 'LIVE') {
+                        void runRoomAction((token) =>
+                          watchSpaceApi.playback(token, room.watchSpaceId, 'PAUSED', room.durationMs));
+                      }
+                    }}
+                  />
+                )}
                 <div className="shared-player-controls">
                   {isHost ? (
                     <>
@@ -284,8 +389,13 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
                         disabled={pending}
                         onClick={() => {
                           const nextState = room.playbackState === 'PLAYING' ? 'PAUSED' : 'PLAYING';
-                          const position = Math.round((videoRef.current?.currentTime ?? 0) * 1000);
+                          const position = Math.round((
+                            youtubeVideoId
+                              ? youtubePlayerRef.current?.getCurrentTime() ?? 0
+                              : videoRef.current?.currentTime ?? 0
+                          ) * 1000);
                           if (nextState === 'PLAYING') void enableSynchronizedPlayback();
+                          else if (youtubeVideoId) youtubePlayerRef.current?.pauseVideo();
                           else videoRef.current?.pause();
                           void runRoomAction((token) =>
                             watchSpaceApi.playback(token, room.watchSpaceId, nextState, position));

@@ -48,7 +48,7 @@ docker compose exec -T postgres psql -U aiws -d aiws -c "UPDATE app_users SET sy
 
 Sign out and sign in again after promotion so the new access token carries the administrator role. The catalogue then shows **Add title** and **Remove** controls.
 
-A title requires a name, duration in seconds, default language, optional description and comma-separated genres, plus a direct public HTTP(S) media-file URL supported by the browser (for example MP4/WebM). A YouTube page URL is not a direct media URL, and the current form does not upload video files.
+A title requires a name, duration in seconds, default language, optional description and comma-separated genres, plus either a direct public MP4/WebM media-file URL or an individual YouTube video URL that allows embedding. YouTube videos use the official IFrame Player API; the app does not download or proxy YouTube media. Enter the full YouTube video duration in seconds. Playlists and live-stream-specific controls are not supported. Video file upload is not implemented. See [docs/catalog-management.md](docs/catalog-management.md) for supported URL forms and embedding limitations.
 
 Removing a title archives it instead of physically deleting its database row. Archived titles disappear from the published catalogue, while existing room records and historical references remain intact.
 

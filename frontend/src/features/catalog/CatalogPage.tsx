@@ -3,6 +3,7 @@ import { ApiError } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { catalogApi, formatDuration, type PageResponse, type TitleDetail, type TitleSummary } from './catalogApi';
 import { watchSpaceApi, type WatchSpace } from '../watchspace/watchSpaceApi';
+import { getYouTubeEmbedUrl, getYouTubeVideoId, isYouTubeHostUrl } from '../media/youtube';
 import './catalog-admin.css';
 
 const PAGE_SIZE = 12;
@@ -167,6 +168,10 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
     const durationSeconds = Number(createDurationSeconds);
     if (!Number.isFinite(durationSeconds) || durationSeconds < 1 || durationSeconds > 86_400) {
       setCatalogActionError('Duration must be between 1 second and 24 hours.');
+      return;
+    }
+    if (isYouTubeHostUrl(createVideoUrl) && !getYouTubeVideoId(createVideoUrl)) {
+      setCatalogActionError('Enter a valid YouTube video URL, such as https://www.youtube.com/watch?v=VIDEO_ID.');
       return;
     }
     setCreatePending(true);
@@ -373,12 +378,28 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
                   <div><dt>Genres</dt><dd>{selectedTitle.genres.join(', ') || 'Not specified'}</dd></div>
                 </dl>
                 {(() => {
+                  const youtubeVideoId = getYouTubeVideoId(selectedTitle.videoAssetUri);
+                  if (youtubeVideoId) {
+                    return (
+                      <div className="sample-player-wrap">
+                        <iframe
+                          className="sample-player sample-player-youtube"
+                          src={getYouTubeEmbedUrl(youtubeVideoId)}
+                          title={`YouTube preview: ${selectedTitle.name}`}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          allowFullScreen
+                        />
+                        <p className="detail-note">Preview this YouTube video, then create a room to synchronize playback with your friends. The video must allow embedding.</p>
+                      </div>
+                    );
+                  }
                   try {
                     const mediaUrl = new URL(selectedTitle.videoAssetUri);
                     return (mediaUrl.protocol === 'https:' || mediaUrl.protocol === 'http:') ? (
                       <div className="sample-player-wrap">
                         <video className="sample-player" controls playsInline preload="metadata" aria-label={`Preview ${selectedTitle.name}`}>
-                          <source src={mediaUrl.href} type="video/mp4" />
+                          <source src={mediaUrl.href} />
                           Your browser does not support this video. <a href={mediaUrl.href}>Open the sample clip</a>.
                         </video>
                         <p className="detail-note">Preview the sample title here, then start a room to keep playback and chat in sync with your friends.</p>
@@ -408,7 +429,7 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
             <button className="detail-close" type="button" onClick={() => setCreateOpen(false)} aria-label="Close add-title form" disabled={createPending}>×</button>
             <p className="eyebrow">CATALOGUE MANAGEMENT</p>
             <h2 id="create-title-heading">Add a title.</h2>
-            <p className="detail-description">Add another playable title to your published catalogue. Use a direct public HTTP(S) video URL.</p>
+            <p className="detail-description">Add a direct MP4/WebM media URL or a public YouTube video that allows embedding.</p>
             <form className="catalog-create-form" onSubmit={(event) => void createTitle(event)}>
               <label className="catalog-create-field" htmlFor="catalog-title-name">Title name
                 <input id="catalog-title-name" value={createName} onChange={(event) => setCreateName(event.currentTarget.value)} maxLength={200} required />
@@ -419,14 +440,15 @@ export function CatalogPage({ onBack, onRoomEnter }: CatalogPageProps) {
               <div className="catalog-create-row">
                 <label className="catalog-create-field" htmlFor="catalog-title-duration">Duration (seconds)
                   <input id="catalog-title-duration" type="number" min="1" max="86400" step="1" value={createDurationSeconds} onChange={(event) => setCreateDurationSeconds(event.currentTarget.value)} required />
+                  <small>For YouTube, enter the full video duration; the app uses it for the shared seek bar.</small>
                 </label>
                 <label className="catalog-create-field" htmlFor="catalog-title-locale">Default language
                   <input id="catalog-title-locale" value={createLocale} onChange={(event) => setCreateLocale(event.currentTarget.value)} maxLength={16} placeholder="en-IN" />
                 </label>
               </div>
               <label className="catalog-create-field" htmlFor="catalog-title-video">Video URL
-                <input id="catalog-title-video" type="url" value={createVideoUrl} onChange={(event) => setCreateVideoUrl(event.currentTarget.value)} placeholder="https://example.com/video.mp4" maxLength={2048} required />
-                <small>Use a direct media file URL that the browser can play, not a YouTube or streaming-page URL.</small>
+                <input id="catalog-title-video" type="url" value={createVideoUrl} onChange={(event) => setCreateVideoUrl(event.currentTarget.value)} placeholder="https://example.com/video.mp4 or https://youtu.be/VIDEO_ID" maxLength={2048} required />
+                <small>Use a direct MP4/WebM file URL or a public YouTube video URL with embedding enabled. Enter the video's full duration in seconds above.</small>
               </label>
               <label className="catalog-create-field" htmlFor="catalog-title-genres">Genres (comma-separated)
                 <input id="catalog-title-genres" value={createGenres} onChange={(event) => setCreateGenres(event.currentTarget.value)} maxLength={500} placeholder="nature, documentary" />

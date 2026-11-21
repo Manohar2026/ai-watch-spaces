@@ -179,3 +179,77 @@ test('admin can add multiple catalogue titles and remove one safely', async ({ p
   await expect(firstCard).toHaveCount(0);
   await expect(page.getByRole('heading', { name: secondTitle, exact: true })).toBeVisible();
 });
+
+test('admin can add a YouTube title and synchronize its embedded player in a watch room', async ({ page }) => {
+  await page.route('https://www.youtube.com/embed/**', (route) => route.abort());
+  await page.route('https://www.youtube.com/iframe_api', (route) => route.fulfill({
+    contentType: 'application/javascript',
+    body: `
+      window.YT = {
+        PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 },
+        Player: class {
+          constructor(element, options) {
+            this.options = options;
+            this.currentTime = 0;
+            this.state = -1;
+            this.frame = document.createElement('iframe');
+            this.frame.setAttribute('data-testid', 'youtube-room-frame');
+            this.frame.setAttribute('data-player-state', '-1');
+            element.replaceWith(this.frame);
+            window.setTimeout(() => options.events.onReady({ target: this }), 0);
+          }
+          playVideo() {
+            this.state = 1;
+            this.frame.setAttribute('data-player-state', '1');
+            this.options.events.onStateChange({ target: this, data: 1 });
+          }
+          pauseVideo() {
+            this.state = 2;
+            this.frame.setAttribute('data-player-state', '2');
+            this.options.events.onStateChange({ target: this, data: 2 });
+          }
+          seekTo(seconds) { this.currentTime = seconds; }
+          getCurrentTime() { return this.currentTime; }
+          getPlayerState() { return this.state; }
+          destroy() { this.frame.remove(); }
+        }
+      };
+      window.onYouTubeIframeAPIReady?.();
+    `,
+  }));
+
+  await signIn(page, hostEmail, hostPassword);
+  await browseCatalogue(page);
+
+  const titleName = `YouTube Test ${Date.now()}`;
+  await page.getByRole('button', { name: 'Add title' }).click();
+  const createDialog = page.getByRole('dialog', { name: 'Add a title.' });
+  await createDialog.getByLabel('Title name').fill(titleName);
+  await createDialog.getByLabel('Description').fill('YouTube IFrame API browser test.');
+  await createDialog.getByLabel('Duration (seconds)').fill('213');
+  await createDialog.getByLabel('Default language').fill('en-IN');
+  await createDialog.getByLabel('Video URL').fill('https://youtu.be/dQw4w9WgXcQ');
+  await createDialog.getByLabel('Genres (comma-separated)').fill('test, music');
+  await createDialog.getByRole('button', { name: 'Create title' }).click();
+  await expect(createDialog).toHaveCount(0);
+
+  const titleCard = page.locator('.title-card').filter({ hasText: titleName });
+  await expect(titleCard).toBeVisible();
+  await titleCard.getByRole('button', { name: /View details/ }).click();
+
+  const preview = page.getByTitle(`YouTube preview: ${titleName}`);
+  await expect(preview).toHaveAttribute(
+    'src',
+    'https://www.youtube.com/embed/dQw4w9WgXcQ?playsinline=1&rel=0',
+  );
+
+  await page.getByRole('button', { name: /Create a watch space/ }).click();
+  await expect(page.getByRole('button', { name: 'Start the room' })).toBeVisible();
+  await page.getByRole('button', { name: 'Start the room' }).click();
+
+  const playerFrame = page.getByTestId('youtube-room-frame');
+  await expect(playerFrame).toBeVisible();
+  await page.getByRole('button', { name: 'Play for everyone' }).click();
+  await expect(page.getByRole('button', { name: 'Pause for everyone' })).toBeVisible();
+  await expect(playerFrame).toHaveAttribute('data-player-state', '1');
+});
