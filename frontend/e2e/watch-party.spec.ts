@@ -277,8 +277,10 @@ test('admin can add a YouTube title and synchronize its embedded player in a wat
   await page.getByRole('button', { name: 'Mute player' }).click();
   await expect(page.getByRole('button', { name: 'Unmute player' })).toBeVisible();
   await expect(playerFrame).toHaveAttribute('data-muted', 'true');
-  await page.getByLabel('Player volume').fill('65');
-  await expect(playerFrame).toHaveAttribute('data-volume', '65');
+  const volumeSlider = page.getByLabel('Player volume');
+  await volumeSlider.focus();
+  await volumeSlider.press('ArrowLeft');
+  await expect(playerFrame).toHaveAttribute('data-volume', '99');
   await expect(playerFrame).toHaveAttribute('data-muted', 'false');
 
   const playerShell = page.locator('.shared-player');
