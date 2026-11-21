@@ -549,10 +549,6 @@ export function WatchSpacePage({ initialRoom, inviteCode, onExit, onRoomChange }
                     </button>
                   </div>
 
-                    <button className="room-secondary-action" type="button" onClick={() => void enableSynchronizedPlayback()}>
-                      Enable synchronized playback
-                    </button>
-                  )}
                 </div>
               </div>
             )}
